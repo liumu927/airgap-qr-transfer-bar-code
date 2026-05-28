@@ -1,0 +1,27 @@
+{
+  "name": "airgap-qr-transfer",
+  "version-string": "0.1.0",
+  "builtin-baseline": "d015e31e90838a4c9dfa3eed45979bc70d9357fc",
+  "dependencies": [
+    "libqrencode",
+    "nu-book-zxing-cpp"
+  ],
+  "features": {
+    "qt-app": {
+      "description": "Qt/QML desktop application target dependencies.",
+      "dependencies": [
+        {
+          "name": "qtbase",
+          "default-features": false,
+          "features": [
+            "freetype",
+            "gui",
+            "png",
+            "thread"
+          ]
+        },
+        "qtdeclarative"
+      ]
+    }
+  }
+}
