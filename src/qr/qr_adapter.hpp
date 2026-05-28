@@ -22,6 +22,12 @@ struct QrRasterImage {
     std::vector<std::uint8_t> luminance;
 };
 
+struct RgbImage {
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+    std::vector<std::uint8_t> rgb;
+};
+
 enum class QrError {
     None,
     EmptyPayload,
@@ -69,6 +75,7 @@ public:
 const char* qr_error_name(QrError error);
 bool is_valid_image_shape(const QrImage& image);
 bool is_valid_raster_image_shape(const QrRasterImage& image);
+bool is_valid_rgb_image_shape(const RgbImage& image);
 QrRasterImage render_qr_to_luminance(
     const QrImage& image,
     std::uint32_t pixels_per_module = 8,

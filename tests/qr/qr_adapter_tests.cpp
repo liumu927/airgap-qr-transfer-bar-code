@@ -189,6 +189,8 @@ void test_zxing_decodes_qr_inside_larger_camera_like_frame_when_available()
 
 } // namespace
 
+void run_cimbar_adapter_tests();
+
 int main()
 {
     test_mock_adapter_round_trips_protocol_payload();
@@ -201,6 +203,7 @@ int main()
     test_libqrencode_encoder_produces_module_grid_when_available();
     test_libqrencode_and_zxing_round_trip_protocol_payload_when_available();
     test_zxing_decodes_qr_inside_larger_camera_like_frame_when_available();
+    run_cimbar_adapter_tests();
 
     std::cout << "airgap_qr_tests passed\n";
     return 0;

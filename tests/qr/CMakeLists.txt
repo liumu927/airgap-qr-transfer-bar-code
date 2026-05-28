@@ -1,5 +1,6 @@
 add_executable(airgap_qr_tests
     qr_adapter_tests.cpp
+    qr_cimbar_adapter_tests.cpp
 )
 
 target_link_libraries(airgap_qr_tests PRIVATE airgap_qr)

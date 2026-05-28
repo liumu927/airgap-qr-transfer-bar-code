@@ -1,4 +1,6 @@
 add_library(airgap_app_core
+    cimbar_payload.cpp
+    cimbar_payload.hpp
     receive_frame_collector.cpp
     receive_frame_collector.hpp
     send_frame_builder.cpp

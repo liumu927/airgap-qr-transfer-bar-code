@@ -17,7 +17,7 @@ ApplicationWindow {
 
     property var selectedReceiveCamera: receiveMediaDevices.defaultVideoInput
     property bool receiveCameraInitialized: false
-    property var speedModeLabels: ["Safe", "Balanced", "Fast"]
+    property var speedModeLabels: sendController.speedModeLabels
     readonly property bool androidCameraHot: Qt.platform.os === "android"
 
     readonly property int pagePadding: width < 760 ? 12 : 18

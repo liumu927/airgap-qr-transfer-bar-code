@@ -1,13 +1,16 @@
 #include "frame.hpp"
+#include "cimbar_payload.hpp"
 #include "qr_adapter.hpp"
 #include "qr_mock_adapter.hpp"
 #include "receive_frame_collector.hpp"
 #include "send_frame_builder.hpp"
 #include "session.hpp"
+#include "sha256.hpp"
 #include "transfer_speed.hpp"
 
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <string_view>
 #include <variant>
 
@@ -144,7 +147,7 @@ void test_build_send_package_reports_qr_capacity_errors()
 void test_transfer_speed_profiles_are_ordered_and_safe_by_default()
 {
     require(kDefaultTransferSpeedMode == 0, "default speed mode should remain Safe");
-    require(kTransferSpeedProfiles.size() == 3, "speed mode list should contain Safe, Balanced, and Fast");
+    require(kTransferSpeedProfiles.size() >= 3, "speed mode list should contain Safe, Balanced, and Fast");
 
     const auto& safe = transfer_speed_profile(0);
     const auto& balanced = transfer_speed_profile(1);
@@ -168,6 +171,9 @@ void test_transfer_speed_profiles_fit_default_qr_payload_limit()
 
     for (int i = 0; i < static_cast<int>(kTransferSpeedProfiles.size()); ++i) {
         const auto& profile = transfer_speed_profile(i);
+        if (profile.codec != VisualTransferCodec::Qr) {
+            continue;
+        }
         const auto result = build_send_package(
             generate_session_id(),
             "profile-fit.bin",
@@ -177,6 +183,68 @@ void test_transfer_speed_profiles_fit_default_qr_payload_limit()
 
         require(result.ok(), result.message);
     }
+}
+
+void test_cimbar_payload_roundtrip_verifies_hash()
+{
+    CimbarPayload payload;
+    payload.session_id = generate_session_id();
+    payload.file_name = "message.txt";
+    payload.file_bytes = sample_file_bytes();
+    payload.file_id = derive_file_id(
+        payload.session_id,
+        static_cast<std::uint64_t>(payload.file_bytes.size()),
+        sha256(payload.file_bytes),
+        payload.file_name);
+    payload.text_message = true;
+
+    const auto encoded = encode_cimbar_payload(payload);
+    require(encoded.ok(), encoded.message);
+
+    const auto decoded = decode_cimbar_payload(encoded.bytes);
+    require(decoded.ok(), decoded.message);
+    require(decoded.payload.file_name == payload.file_name, "cimbar payload should preserve the file name");
+    require(decoded.payload.file_bytes == payload.file_bytes, "cimbar payload should preserve file bytes");
+    require(decoded.payload.text_message, "cimbar payload should preserve text flag");
+    require(decoded.payload.session_id == payload.session_id, "cimbar payload should preserve session_id");
+    require(decoded.payload.file_id == payload.file_id, "cimbar payload should preserve file_id");
+}
+
+void test_cimbar_payload_rejects_corruption()
+{
+    CimbarPayload payload;
+    payload.session_id = generate_session_id();
+    payload.file_name = "sample.bin";
+    payload.file_bytes = sample_file_bytes();
+    payload.file_id = derive_file_id(
+        payload.session_id,
+        static_cast<std::uint64_t>(payload.file_bytes.size()),
+        sha256(payload.file_bytes),
+        payload.file_name);
+
+    auto encoded = encode_cimbar_payload(payload);
+    require(encoded.ok(), encoded.message);
+    require(encoded.bytes.size() > 12, "encoded cimbar payload should be large enough to corrupt");
+    encoded.bytes[encoded.bytes.size() - 8U] ^= 0x55U;
+
+    const auto decoded = decode_cimbar_payload(encoded.bytes);
+    require(decoded.error == CimbarPayloadError::Malformed, "cimbar payload should reject CRC corruption");
+}
+
+void test_cimbar_payload_rejects_name_that_exceeds_u16()
+{
+    CimbarPayload payload;
+    payload.session_id = generate_session_id();
+    payload.file_name.assign(static_cast<std::size_t>(std::numeric_limits<std::uint16_t>::max()) + 1U, 'a');
+    payload.file_bytes = sample_file_bytes();
+    payload.file_id = derive_file_id(
+        payload.session_id,
+        static_cast<std::uint64_t>(payload.file_bytes.size()),
+        sha256(payload.file_bytes),
+        payload.file_name);
+
+    const auto encoded = encode_cimbar_payload(payload);
+    require(encoded.error == CimbarPayloadError::InvalidName, "cimbar payload should reject file names above u16");
 }
 
 void test_text_payload_reuses_file_transfer_flow()
@@ -223,6 +291,9 @@ int main()
     test_build_send_package_reports_qr_capacity_errors();
     test_transfer_speed_profiles_are_ordered_and_safe_by_default();
     test_transfer_speed_profiles_fit_default_qr_payload_limit();
+    test_cimbar_payload_roundtrip_verifies_hash();
+    test_cimbar_payload_rejects_corruption();
+    test_cimbar_payload_rejects_name_that_exceeds_u16();
     test_text_payload_reuses_file_transfer_flow();
     run_receive_frame_collector_tests();
     run_qr_loopback_tests();

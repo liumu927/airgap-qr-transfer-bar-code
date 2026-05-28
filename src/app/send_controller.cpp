@@ -1,10 +1,13 @@
 #include "send_controller.hpp"
 
+#include "cimbar_payload.hpp"
 #include "qr_image_provider.hpp"
+#include "qr_cimbar_adapter.hpp"
 #include "qr_libqrencode_adapter.hpp"
 #include "qr_zxing_adapter.hpp"
 #include "session.hpp"
 #include "send_frame_builder.hpp"
+#include "sha256.hpp"
 #include "transfer_speed.hpp"
 #include "video_frame_luminance.hpp"
 
@@ -283,6 +286,9 @@ QString SendController::status() const
 
 int SendController::frameCount() const
 {
+    if (aqrt::app::transfer_speed_uses_cimbar(speed_mode_)) {
+        return static_cast<int>(cimbar_frames_.size());
+    }
     return static_cast<int>(qr_frames_.size());
 }
 
@@ -319,6 +325,20 @@ int SendController::speedMode() const
 QString SendController::speedModeName() const
 {
     return QString::fromLatin1(aqrt::app::transfer_speed_profile(speed_mode_).name);
+}
+
+QStringList SendController::speedModeLabels() const
+{
+    QStringList labels;
+    for (const auto& profile : aqrt::app::kTransferSpeedProfiles) {
+        labels.push_back(QString::fromLatin1(profile.name));
+    }
+    return labels;
+}
+
+bool SendController::cimbarAvailable() const
+{
+    return aqrt::qr::cimbar_backend_available();
 }
 
 void SendController::chooseOpenFile()
@@ -408,6 +428,48 @@ void SendController::prepareBytes(QString file_name, const QByteArray& data, boo
 
     const auto session_id = aqrt::core::generate_session_id();
     const auto& speed_profile = aqrt::app::transfer_speed_profile(speed_mode_);
+    if (speed_profile.codec == aqrt::app::VisualTransferCodec::Cimbar) {
+        if (!aqrt::qr::cimbar_backend_available()) {
+            clearFrames();
+            setStatus("Cimbar backend is not enabled in this build");
+            return;
+        }
+
+        aqrt::app::CimbarPayload payload;
+        payload.session_id = session_id;
+        payload.file_name = std::string(file_name_utf8.constData(), static_cast<std::size_t>(file_name_utf8.size()));
+        payload.file_id = aqrt::core::derive_file_id(
+            session_id,
+            static_cast<std::uint64_t>(file_bytes.size()),
+            aqrt::core::sha256(file_bytes),
+            payload.file_name);
+        payload.text_message = text_message;
+        payload.file_bytes = file_bytes;
+        const auto encoded_payload = aqrt::app::encode_cimbar_payload(payload);
+        if (!encoded_payload.ok()) {
+            clearFrames();
+            setStatus(QString("Cimbar payload failed: %1")
+                          .arg(aqrt::app::cimbar_payload_error_name(encoded_payload.error)));
+            return;
+        }
+
+        const aqrt::qr::CimbarFileEncoder encoder;
+        const auto encoded = encoder.encode_bytes("airgap-transfer.aqtcim", encoded_payload.bytes);
+        if (!encoded.ok()) {
+            clearFrames();
+            setStatus(QString("Cimbar encode failed: %1").arg(QString::fromStdString(encoded.message)));
+            return;
+        }
+
+        cimbar_frames_ = std::move(encoded.frames);
+        has_package_ = true;
+        resend_mode_ = false;
+        current_frame_index_ = 0;
+        publishCurrentFrame();
+        setStatus(QString("Prepared %1 cimbar frame(s)").arg(frameCount()));
+        return;
+    }
+
     const aqrt::qr::LibQrEncodeAdapter encoder(aqrt::app::kDefaultQrPayloadLimit);
     auto build_result = aqrt::app::build_send_package(
         session_id,
@@ -443,12 +505,18 @@ void SendController::setSpeedMode(int mode)
 
     speed_mode_ = normalized;
     playback_timer_.setInterval(aqrt::app::transfer_speed_profile(speed_mode_).playback_interval_ms);
+    if (has_package_) {
+        stopPlayback();
+        clearFrames();
+        setStatus("Speed changed; prepare the file or text again");
+        return;
+    }
     emit stateChanged();
 }
 
 void SendController::nextFrame()
 {
-    if (qr_frames_.empty()) {
+    if (frameCount() <= 0) {
         return;
     }
     current_frame_index_ = (current_frame_index_ + 1) % frameCount();
@@ -458,7 +526,7 @@ void SendController::nextFrame()
 
 void SendController::previousFrame()
 {
-    if (qr_frames_.empty()) {
+    if (frameCount() <= 0) {
         return;
     }
     current_frame_index_ = (current_frame_index_ + frameCount() - 1) % frameCount();
@@ -468,7 +536,7 @@ void SendController::previousFrame()
 
 void SendController::startPlayback()
 {
-    if (qr_frames_.empty() || playing_) {
+    if (frameCount() <= 0 || playing_) {
         return;
     }
     playing_ = true;
@@ -509,6 +577,10 @@ void SendController::attachFeedbackVideoSink(QObject* video_sink)
 
 void SendController::startFeedbackScan()
 {
+    if (aqrt::app::transfer_speed_uses_cimbar(speed_mode_)) {
+        setStatus("Feedback QR is only available for QR modes");
+        return;
+    }
     if (!has_package_) {
         setStatus("Prepare a file or text before scanning feedback");
         return;
@@ -557,6 +629,10 @@ void SendController::stopFeedbackScan()
 
 void SendController::clearResendFilter()
 {
+    if (aqrt::app::transfer_speed_uses_cimbar(speed_mode_)) {
+        setStatus("Cimbar mode does not use missing-frame feedback");
+        return;
+    }
     if (!has_package_ || all_qr_frames_.empty()) {
         return;
     }
@@ -576,10 +652,14 @@ void SendController::setStatus(QString status)
 
 void SendController::publishCurrentFrame()
 {
-    if (image_provider_ == nullptr || qr_frames_.empty()) {
+    if (image_provider_ == nullptr || frameCount() <= 0) {
         return;
     }
-    image_provider_->setImage(qr_frames_[static_cast<std::size_t>(current_frame_index_)]);
+    if (aqrt::app::transfer_speed_uses_cimbar(speed_mode_)) {
+        image_provider_->setImage(cimbar_frames_[static_cast<std::size_t>(current_frame_index_)]);
+    } else {
+        image_provider_->setImage(qr_frames_[static_cast<std::size_t>(current_frame_index_)]);
+    }
     ++image_revision_;
     emit imageChanged();
 }
@@ -588,6 +668,7 @@ void SendController::clearFrames()
 {
     qr_frames_.clear();
     all_qr_frames_.clear();
+    cimbar_frames_.clear();
     manifest_ = {};
     current_frame_index_ = 0;
     resend_mode_ = false;

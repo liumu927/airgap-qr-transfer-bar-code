@@ -16,10 +16,15 @@
 
 #include <atomic>
 #include <cstdint>
+#include <memory>
 
 class QImage;
 class QrImageProvider;
 class QVideoSink;
+
+namespace aqrt::qr {
+class CimbarFileDecoder;
+}
 
 class ReceiveController final : public QObject {
     Q_OBJECT
@@ -54,6 +59,7 @@ class ReceiveController final : public QObject {
 
 public:
     explicit ReceiveController(QrImageProvider* feedback_image_provider = nullptr, QObject* parent = nullptr);
+    ~ReceiveController() override;
 
     [[nodiscard]] QString status() const;
     [[nodiscard]] QString fileName() const;
@@ -113,9 +119,15 @@ private:
     void refreshCameraAvailability();
     void captureVideoFrame(const QVideoFrame& frame);
     void decodeVideoRaster(aqrt::qr::QrRasterImage raster);
+    void decodeVideoRgb(aqrt::qr::RgbImage image);
     void saveToAndroidContentUri(const QString& uri_string);
+    [[nodiscard]] bool hasVerifiedPayload() const;
+    [[nodiscard]] QString verifiedFileName() const;
+    [[nodiscard]] const aqrt::core::Bytes& verifiedBytes() const;
 
     aqrt::app::ReceiveFrameCollector collector_;
+    std::unique_ptr<aqrt::qr::CimbarFileDecoder> cimbar_decoder_;
+    aqrt::core::Bytes cimbar_file_bytes_;
     QrImageProvider* feedback_image_provider_ = nullptr;
     QMediaDevices media_devices_;
     QPointer<QVideoSink> video_sink_;
@@ -125,6 +137,7 @@ private:
     QString last_error_;
     QString last_saved_path_;
     QString received_text_;
+    QString cimbar_file_name_;
     QString feedback_status_;
     QString selected_camera_name_;
     int selected_camera_index_ = -1;
@@ -136,6 +149,8 @@ private:
     std::atomic_bool decode_pending_ = false;
     std::atomic<qint64> last_decode_ms_ = 0;
     bool camera_available_ = false;
+    bool cimbar_completed_ = false;
+    bool cimbar_text_message_ = false;
     std::atomic_int video_frame_count_ = 0;
     int decode_attempt_count_ = 0;
     int decode_failure_count_ = 0;

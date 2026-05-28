@@ -5,7 +5,7 @@ param(
     [string]$ActivityName = "org.qtproject.qt.android.bindings.QtActivity",
     [string]$RemoteFileName = "airgap-android-send-sample.txt",
     [string]$AdbPath = "C:\Android\Sdk\platform-tools\adb.exe",
-    [ValidateSet("safe", "balanced", "fast")]
+    [ValidateSet("safe", "balanced", "fast", "cimbar")]
     [string]$SpeedMode = "safe",
     [switch]$Windowed,
     [switch]$NoPlay

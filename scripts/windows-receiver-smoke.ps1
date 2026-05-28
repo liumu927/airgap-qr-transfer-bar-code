@@ -3,7 +3,7 @@ param(
     [string]$SaveDir = "",
     [string]$StatusFile = "",
     [int]$CameraIndex = -1,
-    [ValidateSet("safe", "balanced", "fast")]
+    [ValidateSet("safe", "balanced", "fast", "cimbar")]
     [string]$SpeedMode = "safe",
     [switch]$Windowed,
     [switch]$NoScan

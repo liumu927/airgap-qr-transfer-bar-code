@@ -2,7 +2,7 @@ param(
     [string]$FilePath = "",
     [string]$Text = "",
     [string]$AppPath = "",
-    [ValidateSet("safe", "balanced", "fast")]
+    [ValidateSet("safe", "balanced", "fast", "cimbar")]
     [string]$SpeedMode = "safe",
     [switch]$Windowed,
     [switch]$NoPlay

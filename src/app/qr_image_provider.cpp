@@ -35,6 +35,30 @@ QImage render_qr_image(const aqrt::qr::QrImage& image)
     return rendered;
 }
 
+QImage render_rgb_image(const aqrt::qr::RgbImage& image)
+{
+    if (!aqrt::qr::is_valid_rgb_image_shape(image)) {
+        return empty_image();
+    }
+
+    QImage rendered(
+        static_cast<int>(image.width),
+        static_cast<int>(image.height),
+        QImage::Format_RGB32);
+    for (int y = 0; y < rendered.height(); ++y) {
+        auto* line = reinterpret_cast<QRgb*>(rendered.scanLine(y));
+        const auto row_offset = static_cast<std::size_t>(y) * image.width * 3U;
+        for (int x = 0; x < rendered.width(); ++x) {
+            const auto pixel_offset = row_offset + static_cast<std::size_t>(x) * 3U;
+            line[x] = qRgb(
+                image.rgb[pixel_offset],
+                image.rgb[pixel_offset + 1U],
+                image.rgb[pixel_offset + 2U]);
+        }
+    }
+    return rendered;
+}
+
 } // namespace
 
 QrImageProvider::QrImageProvider()
@@ -61,6 +85,12 @@ void QrImageProvider::setImage(const aqrt::qr::QrImage& image)
 {
     QMutexLocker locker(&mutex_);
     current_image_ = render_qr_image(image);
+}
+
+void QrImageProvider::setImage(const aqrt::qr::RgbImage& image)
+{
+    QMutexLocker locker(&mutex_);
+    current_image_ = render_rgb_image(image);
 }
 
 void QrImageProvider::clear()

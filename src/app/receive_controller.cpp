@@ -1,6 +1,8 @@
 #include "receive_controller.hpp"
 
+#include "cimbar_payload.hpp"
 #include "qr_image_provider.hpp"
+#include "qr_cimbar_adapter.hpp"
 #include "qr_libqrencode_adapter.hpp"
 #include "qr_zxing_adapter.hpp"
 #include "send_frame_builder.hpp"
@@ -120,6 +122,8 @@ ReceiveController::ReceiveController(QrImageProvider* feedback_image_provider, Q
         });
 }
 
+ReceiveController::~ReceiveController() = default;
+
 QString ReceiveController::status() const
 {
     return status_;
@@ -127,6 +131,9 @@ QString ReceiveController::status() const
 
 QString ReceiveController::fileName() const
 {
+    if (cimbar_completed_) {
+        return cimbar_file_name_;
+    }
     return QString::fromStdString(collector_.file_name());
 }
 
@@ -142,6 +149,9 @@ int ReceiveController::totalChunks() const
 
 double ReceiveController::progress() const
 {
+    if (aqrt::app::transfer_speed_uses_cimbar(speed_mode_)) {
+        return cimbar_completed_ ? 1.0 : 0.0;
+    }
     const int total = totalChunks();
     if (total <= 0) {
         return 0.0;
@@ -156,7 +166,7 @@ bool ReceiveController::scanning() const
 
 bool ReceiveController::completed() const
 {
-    return collector_.completed();
+    return collector_.completed() || cimbar_completed_;
 }
 
 bool ReceiveController::cameraAvailable() const
@@ -247,6 +257,9 @@ QString ReceiveController::speedModeName() const
 
 bool ReceiveController::feedbackAvailable() const
 {
+    if (aqrt::app::transfer_speed_uses_cimbar(speed_mode_)) {
+        return false;
+    }
     return !collector_.completed()
         && collector_.has_manifest()
         && (collector_.missing_chunk_count() > 0 || !collector_.has_end());
@@ -341,6 +354,13 @@ void ReceiveController::stopScanning()
 void ReceiveController::reset()
 {
     collector_.reset();
+    if (cimbar_decoder_) {
+        cimbar_decoder_->reset();
+    }
+    cimbar_file_bytes_.clear();
+    cimbar_file_name_.clear();
+    cimbar_completed_ = false;
+    cimbar_text_message_ = false;
     resetStats();
     clearFeedback();
     scanning_.store(false);
@@ -382,7 +402,7 @@ void ReceiveController::attachVideoSink(QObject* video_sink)
 
 void ReceiveController::saveToFile(const QUrl& file_url)
 {
-    if (!collector_.completed()) {
+    if (!hasVerifiedPayload()) {
         setLastError("No verified file to save");
         setStatus("No verified file to save");
         return;
@@ -402,7 +422,7 @@ void ReceiveController::saveToFile(const QUrl& file_url)
         return;
     }
 
-    const auto& bytes = collector_.assembled_bytes();
+    const auto& bytes = verifiedBytes();
     const auto written = out.write(
         reinterpret_cast<const char*>(bytes.data()),
         static_cast<qint64>(bytes.size()));
@@ -419,7 +439,7 @@ void ReceiveController::saveToFile(const QUrl& file_url)
 
 void ReceiveController::saveToDirectory(const QUrl& directory_url)
 {
-    if (!collector_.completed()) {
+    if (!hasVerifiedPayload()) {
         setLastError("No verified file to save");
         setStatus("No verified file to save");
         return;
@@ -439,13 +459,13 @@ void ReceiveController::saveToDirectory(const QUrl& directory_url)
         return;
     }
 
-    const QString safe_name = QFileInfo(QString::fromStdString(collector_.file_name())).fileName();
+    const QString safe_name = QFileInfo(verifiedFileName()).fileName();
     saveToFile(QUrl::fromLocalFile(dir.filePath(safe_name)));
 }
 
 void ReceiveController::saveToAppData()
 {
-    if (!collector_.completed()) {
+    if (!hasVerifiedPayload()) {
         setLastError("No verified file to save");
         setStatus("No verified file to save");
         return;
@@ -465,21 +485,21 @@ void ReceiveController::saveToAppData()
         return;
     }
 
-    const QString safe_name = QFileInfo(QString::fromStdString(collector_.file_name())).fileName();
+    const QString safe_name = QFileInfo(verifiedFileName()).fileName();
     const QString file_path = dir.filePath(QStringLiteral("received/") + safe_name);
     saveToFile(QUrl::fromLocalFile(file_path));
 }
 
 void ReceiveController::chooseSaveLocation()
 {
-    if (!collector_.completed()) {
+    if (!hasVerifiedPayload()) {
         setLastError("No verified file to save");
         setStatus("No verified file to save");
         return;
     }
 
 #ifdef Q_OS_ANDROID
-    const QString safe_name = QFileInfo(QString::fromStdString(collector_.file_name())).fileName();
+    const QString safe_name = QFileInfo(verifiedFileName()).fileName();
     QJniObject intent(
         "android/content/Intent",
         "(Ljava/lang/String;)V",
@@ -555,6 +575,13 @@ void ReceiveController::copyReceivedText()
 
 void ReceiveController::showFeedbackQr()
 {
+    if (aqrt::app::transfer_speed_uses_cimbar(speed_mode_)) {
+        feedback_status_ = "Cimbar mode does not use missing-frame feedback";
+        setLastError(feedback_status_);
+        emit feedbackChanged();
+        setStatus(feedback_status_);
+        return;
+    }
     if (feedback_image_provider_ == nullptr) {
         feedback_status_ = "Feedback QR unavailable";
         setLastError(feedback_status_);
@@ -604,7 +631,7 @@ void ReceiveController::hideFeedbackQr()
 void ReceiveController::saveToAndroidContentUri(const QString& uri_string)
 {
 #ifdef Q_OS_ANDROID
-    if (!collector_.completed()) {
+    if (!hasVerifiedPayload()) {
         setLastError("No verified file to save");
         setStatus("No verified file to save");
         return;
@@ -642,7 +669,7 @@ void ReceiveController::saveToAndroidContentUri(const QString& uri_string)
     }
 
     QJniEnvironment env;
-    const auto& bytes = collector_.assembled_bytes();
+    const auto& bytes = verifiedBytes();
     constexpr qsizetype kChunkSize = 64 * 1024;
     bool ok = true;
     for (qsizetype offset = 0; offset < static_cast<qsizetype>(bytes.size()); offset += kChunkSize) {
@@ -714,6 +741,16 @@ void ReceiveController::setSpeedMode(int mode)
 
     speed_mode_ = normalized;
     decode_interval_ms_ = aqrt::app::transfer_speed_profile(speed_mode_).decode_interval_ms;
+    if (cimbar_decoder_) {
+        cimbar_decoder_->reset();
+    }
+    collector_.reset();
+    cimbar_file_bytes_.clear();
+    cimbar_file_name_.clear();
+    cimbar_completed_ = false;
+    cimbar_text_message_ = false;
+    received_text_.clear();
+    clearFeedback();
     emit stateChanged();
 }
 
@@ -759,6 +796,27 @@ void ReceiveController::refreshCameraAvailability()
     camera_available_ = !QMediaDevices::videoInputs().isEmpty();
 }
 
+bool ReceiveController::hasVerifiedPayload() const
+{
+    return collector_.completed() || cimbar_completed_;
+}
+
+QString ReceiveController::verifiedFileName() const
+{
+    if (cimbar_completed_) {
+        return cimbar_file_name_;
+    }
+    return QString::fromStdString(collector_.file_name());
+}
+
+const aqrt::core::Bytes& ReceiveController::verifiedBytes() const
+{
+    if (cimbar_completed_) {
+        return cimbar_file_bytes_;
+    }
+    return collector_.assembled_bytes();
+}
+
 void ReceiveController::captureVideoFrame(const QVideoFrame& frame)
 {
     if (!scanning_.load()) {
@@ -784,13 +842,23 @@ void ReceiveController::captureVideoFrame(const QVideoFrame& frame)
     }
     last_decode_ms_.store(now);
 
-    auto raster = aqrt::app::video_frame_to_luminance(frame);
-    QMetaObject::invokeMethod(
-        this,
-        [this, raster = std::move(raster)]() mutable {
-            decodeVideoRaster(std::move(raster));
-        },
-        Qt::QueuedConnection);
+    if (aqrt::app::transfer_speed_uses_cimbar(speed_mode_)) {
+        auto image = aqrt::app::video_frame_to_rgb(frame);
+        QMetaObject::invokeMethod(
+            this,
+            [this, image = std::move(image)]() mutable {
+                decodeVideoRgb(std::move(image));
+            },
+            Qt::QueuedConnection);
+    } else {
+        auto raster = aqrt::app::video_frame_to_luminance(frame);
+        QMetaObject::invokeMethod(
+            this,
+            [this, raster = std::move(raster)]() mutable {
+                decodeVideoRaster(std::move(raster));
+            },
+            Qt::QueuedConnection);
+    }
 }
 
 void ReceiveController::decodeVideoRaster(aqrt::qr::QrRasterImage raster)
@@ -838,4 +906,68 @@ void ReceiveController::decodeVideoRaster(aqrt::qr::QrRasterImage raster)
         received_text_ = received.text_message ? decode_utf8_text(received.assembled_bytes) : QString{};
     }
     setStatus(collector_status(received));
+}
+
+void ReceiveController::decodeVideoRgb(aqrt::qr::RgbImage image)
+{
+    const AtomicBoolResetGuard clear_pending(decode_pending_);
+
+    if (!scanning_.load() || cimbar_completed_) {
+        return;
+    }
+
+    decode_timer_.restart();
+    ++decode_attempt_count_;
+
+    if (!aqrt::qr::is_valid_rgb_image_shape(image)) {
+        ++decode_failure_count_;
+        setLastError("Invalid RGB video frame");
+        emit stateChanged();
+        return;
+    }
+
+    if (!aqrt::qr::cimbar_backend_available()) {
+        ++decode_failure_count_;
+        setLastError("Cimbar backend is not enabled in this build");
+        setStatus("Cimbar backend is not enabled in this build");
+        return;
+    }
+
+    if (!cimbar_decoder_) {
+        cimbar_decoder_ = std::make_unique<aqrt::qr::CimbarFileDecoder>();
+    }
+
+    const auto decoded = cimbar_decoder_->decode_rgb(image);
+    if (!decoded.ok()) {
+        ++decode_failure_count_;
+        setLastError(QString("Cimbar decode failed: %1").arg(QString::fromStdString(decoded.message)));
+        emit stateChanged();
+        return;
+    }
+    if (!decoded.completed) {
+        ++decode_failure_count_;
+        emit stateChanged();
+        return;
+    }
+
+    const auto payload = aqrt::app::decode_cimbar_payload(decoded.file_bytes);
+    if (!payload.ok()) {
+        ++rejected_qr_frame_count_;
+        const QString error = QString("Cimbar payload rejected: %1")
+                                  .arg(aqrt::app::cimbar_payload_error_name(payload.error));
+        setLastError(error);
+        setStatus(error);
+        return;
+    }
+
+    ++decoded_qr_frame_count_;
+    ++accepted_qr_frame_count_;
+    cimbar_file_name_ = QString::fromStdString(payload.payload.file_name);
+    cimbar_file_bytes_ = std::move(payload.payload.file_bytes);
+    cimbar_text_message_ = payload.payload.text_message;
+    cimbar_completed_ = true;
+    scanning_.store(false);
+    clearFeedback();
+    received_text_ = cimbar_text_message_ ? decode_utf8_text(cimbar_file_bytes_) : QString{};
+    setStatus(QString("Received %1").arg(cimbar_file_name_));
 }

@@ -98,7 +98,7 @@ int main(int argc, char* argv[])
     });
     parser.addOption({
         QStringLiteral("speed-mode"),
-        QStringLiteral("Select transfer speed: safe, balanced, or fast."),
+        QStringLiteral("Select transfer speed: safe, balanced, fast, or cimbar when that backend is enabled."),
         QStringLiteral("mode"),
     });
     parser.process(app);

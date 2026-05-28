@@ -12,6 +12,7 @@ public:
 
     QImage requestImage(const QString& id, QSize* size, const QSize& requestedSize) override;
     void setImage(const aqrt::qr::QrImage& image);
+    void setImage(const aqrt::qr::RgbImage& image);
     void clear();
 
 private:

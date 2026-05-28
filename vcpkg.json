@@ -22,6 +22,12 @@
         },
         "qtdeclarative"
       ]
+    },
+    "cimbar": {
+      "description": "Experimental libcimbar high-density color barcode backend.",
+      "dependencies": [
+        "opencv4"
+      ]
     }
   }
 }

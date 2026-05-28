@@ -6,6 +6,7 @@
 #include <QMetaObject>
 #include <QPointer>
 #include <QString>
+#include <QStringList>
 #include <QTimer>
 #include <QUrl>
 #include <QVideoFrame>
@@ -29,6 +30,8 @@ class SendController final : public QObject {
     Q_PROPERTY(bool resendMode READ resendMode NOTIFY stateChanged)
     Q_PROPERTY(int speedMode READ speedMode NOTIFY stateChanged)
     Q_PROPERTY(QString speedModeName READ speedModeName NOTIFY stateChanged)
+    Q_PROPERTY(QStringList speedModeLabels READ speedModeLabels CONSTANT)
+    Q_PROPERTY(bool cimbarAvailable READ cimbarAvailable CONSTANT)
 
 public:
     explicit SendController(QrImageProvider* image_provider, QObject* parent = nullptr);
@@ -43,6 +46,8 @@ public:
     [[nodiscard]] bool resendMode() const;
     [[nodiscard]] int speedMode() const;
     [[nodiscard]] QString speedModeName() const;
+    [[nodiscard]] QStringList speedModeLabels() const;
+    [[nodiscard]] bool cimbarAvailable() const;
 
     Q_INVOKABLE void chooseOpenFile();
     Q_INVOKABLE void prepareFile(const QUrl& file_url);
@@ -79,6 +84,7 @@ private:
     QString status_ = "Ready";
     std::vector<aqrt::qr::QrImage> qr_frames_;
     std::vector<aqrt::qr::QrImage> all_qr_frames_;
+    std::vector<aqrt::qr::RgbImage> cimbar_frames_;
     aqrt::core::ManifestFrame manifest_{};
     int current_frame_index_ = 0;
     int image_revision_ = 0;

@@ -17,6 +17,7 @@ AirGap QR Transfer 是一个基于动态二维码的跨平台离线文件摆渡�
 - Camera selection on desktop receive mode.
 - Android save flow through the system file picker.
 - QR encoder/decoder behind adapter interfaces, currently using `libqrencode` and `ZXing-C++`.
+- Experimental Cimbar high-density color barcode mode behind `AIRGAP_ENABLE_CIMBAR`.
 - No network, telemetry, cloud sync, update check or crash upload code.
 
 ## Non-Goals
@@ -72,6 +73,7 @@ General:
 - CMake 3.20 or newer.
 - C++20 compiler.
 - vcpkg for `libqrencode` and `nu-book-zxing-cpp`.
+- Optional: vcpkg `opencv4` and the `external/libcimbar` submodule for experimental Cimbar builds.
 
 Windows desktop build:
 
@@ -108,6 +110,15 @@ Build the Qt desktop app with the verified local Qt path:
 cmd /c "call ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"" -arch=x64 && cmake -S . -B build-qt-release-nmake -G ""NMake Makefiles"" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\vcpkg\scripts\buildsystems\vcpkg.cmake"" -DVCPKG_TARGET_TRIPLET=x64-windows -DCMAKE_PREFIX_PATH=""C:\Qt\6.8.3\msvc2022_64"" && cmake --build build-qt-release-nmake && ctest --test-dir build-qt-release-nmake --output-on-failure"
 ```
 
+Experimental Cimbar desktop build:
+
+```powershell
+git submodule update --init --recursive
+& "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\vcpkg\vcpkg.exe" install --triplet x64-windows --x-feature=cimbar --x-install-root=build-vcpkg-cimbar\vcpkg_installed
+
+cmd /c "call ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"" -arch=x64 && cmake -S . -B build-qt-cimbar-nmake -G ""NMake Makefiles"" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\vcpkg\scripts\buildsystems\vcpkg.cmake"" -DVCPKG_TARGET_TRIPLET=x64-windows -DCMAKE_PREFIX_PATH=""C:\Qt\6.8.3\msvc2022_64"" -DAIRGAP_ENABLE_CIMBAR=ON -DOpenCV_DIR=""C:\Users\weien\Documents\qr-transfer\build-vcpkg-cimbar\vcpkg_installed\x64-windows\share\opencv4"" && cmake --build build-qt-cimbar-nmake && ctest --test-dir build-qt-cimbar-nmake --output-on-failure"
+```
+
 Package a Windows 10 x64 deployment zip:
 
 ```powershell
@@ -135,6 +146,12 @@ $env:ANDROID_NDK_HOME = "C:\Android\Sdk\ndk\27.2.12479018"
 $env:ANDROID_NDK_ROOT = "C:\Android\Sdk\ndk\27.2.12479018"
 $env:ANDROID_SDK_ROOT = "C:\Android\Sdk"
 & "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\vcpkg\vcpkg.exe" install --triplet arm64-android --x-install-root=build-vcpkg-android\vcpkg_installed
+```
+
+For the experimental Android Cimbar build, install the optional feature as well:
+
+```powershell
+& "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\vcpkg\vcpkg.exe" install --triplet arm64-android --x-feature=cimbar --x-install-root=build-vcpkg-android\vcpkg_installed
 ```
 
 Configure and build the QR-enabled Android debug APK:
@@ -182,6 +199,8 @@ Expected permission:
 uses-permission: name='android.permission.CAMERA'
 ```
 
+Android Cimbar debug builds also require `AIRGAP_ENABLE_CIMBAR=ON`, `OpenCV_DIR` pointing to `build-vcpkg-android\vcpkg_installed\arm64-android\share\opencv4`, and `CMAKE_FIND_ROOT_PATH` including the vcpkg Android install root.
+
 ## Smoke Tests
 
 Install and start the Android APK:
@@ -220,6 +239,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\android-pull-received.ps1 -So
 --camera-index <n>  Select receive camera by zero-based index
 --save-dir <path>   Auto-save verified receive output to a directory
 --status-file <p>   Write receive diagnostics to a status file
+--speed-mode <mode> Select safe, balanced, fast, or cimbar when available
 ```
 
 ## Security Model

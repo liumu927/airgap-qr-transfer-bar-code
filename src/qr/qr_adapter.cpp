@@ -40,6 +40,15 @@ bool is_valid_raster_image_shape(const QrRasterImage& image)
     return image.luminance.size() == static_cast<std::size_t>(image.width) * image.height;
 }
 
+bool is_valid_rgb_image_shape(const RgbImage& image)
+{
+    if (image.width == 0 || image.height == 0) {
+        return false;
+    }
+    constexpr std::size_t kChannels = 3;
+    return image.rgb.size() == static_cast<std::size_t>(image.width) * image.height * kChannels;
+}
+
 QrRasterImage render_qr_to_luminance(
     const QrImage& image,
     std::uint32_t pixels_per_module,
