@@ -1,5 +1,7 @@
 # AirGap QR Transfer
 
+![AirGap QR Transfer promotional poster](docs/assets/airgap-qr-transfer-poster.png)
+
 AirGap QR Transfer 是一个基于动态二维码的跨平台离线文件摆渡系统。它面向物理隔离环境：发送端在屏幕上连续播放二维码帧，接收端用摄像头连续扫描、去重、重组并校验文件，从而在没有网络、U 盘、光盘、蓝牙或 Wi-Fi 的情况下完成文件或纯文本传递。
 
 > Status: MVP prototype. Windows and Android debug builds are available, core protocol tests are in place, and small-file end-to-end smoke tests have passed in both Windows -> Android and Android -> Windows directions.
