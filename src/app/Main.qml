@@ -7,19 +7,117 @@ import QtQuick.Window
 
 ApplicationWindow {
     id: root
-    width: 960
-    height: 640
+    width: 1040
+    height: 680
+    minimumWidth: 720
+    minimumHeight: 520
     visible: true
     title: "AirGap QR Transfer"
-    color: "#f6f6f2"
+    color: "#f4f6f1"
+
     property var selectedReceiveCamera: receiveMediaDevices.defaultVideoInput
     property bool receiveCameraInitialized: false
     property var speedModeLabels: ["Safe", "Balanced", "Fast"]
+    readonly property bool androidCameraHot: Qt.platform.os === "android"
+
+    readonly property int pagePadding: width < 760 ? 12 : 18
+    readonly property color accentColor: "#2f7d63"
+    readonly property color accentPressedColor: "#25664f"
+    readonly property color dangerColor: "#b84a45"
+    readonly property color inkColor: "#222725"
+    readonly property color mutedColor: "#66706a"
+    readonly property color panelColor: "#ffffff"
+    readonly property color lineColor: "#d8ddd5"
 
     Component.onCompleted: {
         modeTabs.currentIndex = startupMode
         if (startupFullScreen) {
             root.visibility = Window.FullScreen
+        }
+    }
+
+    component AppButton: Button {
+        id: control
+        property bool primary: false
+        property bool danger: false
+
+        width: 96
+        height: 40
+        font.pixelSize: 13
+        font.weight: primary ? Font.DemiBold : Font.Medium
+        padding: 10
+
+        contentItem: Text {
+            text: control.text
+            color: control.enabled
+                ? (control.primary || control.danger ? "#ffffff" : root.inkColor)
+                : "#8c948e"
+            font: control.font
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
+
+        background: Rectangle {
+            radius: 6
+            color: !control.enabled
+                ? "#e3e7df"
+                : control.pressed
+                    ? (control.primary ? root.accentPressedColor : control.danger ? "#983d39" : "#eef2ec")
+                    : control.primary
+                        ? root.accentColor
+                        : control.danger
+                            ? root.dangerColor
+                            : "#ffffff"
+            border.color: control.primary || control.danger ? "transparent" : root.lineColor
+            border.width: 1
+        }
+    }
+
+    component InfoPill: Rectangle {
+        id: pill
+        property alias text: pillLabel.text
+        property color tone: "#edf4ef"
+        property color textColor: root.inkColor
+
+        implicitWidth: pillLabel.implicitWidth + 20
+        implicitHeight: 28
+        radius: 6
+        color: tone
+        border.color: Qt.darker(tone, 1.08)
+        border.width: 1
+
+        Label {
+            id: pillLabel
+            anchors.centerIn: parent
+            color: pill.textColor
+            font.pixelSize: 12
+            font.weight: Font.Medium
+            elide: Text.ElideRight
+            maximumLineCount: 1
+        }
+    }
+
+    component StatusStrip: Rectangle {
+        id: strip
+        property alias text: stripLabel.text
+        property bool alert: false
+
+        Layout.fillWidth: true
+        implicitHeight: 38
+        radius: 6
+        color: alert ? "#fff2ee" : "#eef4ef"
+        border.color: alert ? "#e6b8ab" : "#cadbd0"
+
+        Label {
+            id: stripLabel
+            anchors.fill: parent
+            anchors.leftMargin: 12
+            anchors.rightMargin: 12
+            color: strip.alert ? "#80382f" : root.inkColor
+            font.pixelSize: 13
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
         }
     }
 
@@ -50,7 +148,9 @@ ApplicationWindow {
     Camera {
         id: receiveCamera
         cameraDevice: root.selectedReceiveCamera
-        active: receiveController.scanning || sendController.feedbackScanning
+        active: receiveController.scanning
+            || sendController.feedbackScanning
+            || (root.androidCameraHot && modeTabs.currentIndex === 1 && !receiveController.feedbackVisible)
         onCameraDeviceChanged: receiveController.setSelectedCameraName(cameraDevice.description)
         onErrorOccurred: function(error, errorString) {
             receiveController.noteCameraError(errorString)
@@ -100,198 +200,236 @@ ApplicationWindow {
     }
 
     header: ToolBar {
+        id: topBar
+        padding: 0
+
+        background: Rectangle {
+            color: "#fbfcf8"
+            border.color: root.lineColor
+            border.width: 1
+        }
+
         ColumnLayout {
             anchors.fill: parent
-            spacing: 4
-
-            TabBar {
-                id: modeTabs
-                Layout.fillWidth: true
-
-                TabButton { text: "Send" }
-                TabButton { text: "Receive" }
-            }
+            anchors.margins: root.width < 760 ? 8 : 12
+            spacing: 10
 
             RowLayout {
                 Layout.fillWidth: true
+                spacing: 12
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 1
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: "AirGap QR Transfer"
+                        color: root.inkColor
+                        font.pixelSize: 18
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: modeTabs.currentIndex === 0 ? sendController.status : receiveController.status
+                        color: root.mutedColor
+                        font.pixelSize: 12
+                        elide: Text.ElideRight
+                    }
+                }
+
+                TabBar {
+                    id: modeTabs
+                    Layout.preferredWidth: root.width < 820 ? 220 : 280
+                    Layout.maximumWidth: 320
+                    Layout.alignment: Qt.AlignVCenter
+
+                    TabButton { text: "Send" }
+                    TabButton { text: "Receive" }
+                }
+            }
+
+            Flow {
+                Layout.fillWidth: true
+                Layout.preferredHeight: childrenRect.height
                 spacing: 8
 
-                Button {
+                AppButton {
                     visible: modeTabs.currentIndex === 0
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 56
                     text: "Open"
+                    primary: true
                     onClicked: Qt.platform.os === "android" ? sendController.chooseOpenFile() : openDialog.open()
                 }
 
-                Button {
+                AppButton {
                     visible: modeTabs.currentIndex === 0
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 56
                     text: "Back"
                     enabled: sendController.frameCount > 0
                     onClicked: sendController.previousFrame()
                 }
 
-                Button {
+                AppButton {
                     visible: modeTabs.currentIndex === 0
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 56
                     text: sendController.playing ? "Pause" : "Play"
+                    primary: !sendController.playing
                     enabled: sendController.frameCount > 0
                     onClicked: sendController.playing ? sendController.stopPlayback() : sendController.startPlayback()
                 }
 
-                Button {
+                AppButton {
                     visible: modeTabs.currentIndex === 0
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 56
                     text: "Next"
                     enabled: sendController.frameCount > 0
                     onClicked: sendController.nextFrame()
                 }
 
-                Button {
+                AppButton {
                     visible: modeTabs.currentIndex === 0
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 72
+                    width: 110
                     text: sendController.feedbackScanning ? "Stop FB" : "Scan FB"
+                    danger: sendController.feedbackScanning
                     enabled: sendController.frameCount > 0
                     onClicked: sendController.feedbackScanning ? sendController.stopFeedbackScan() : sendController.startFeedbackScan()
                 }
 
-                Button {
+                AppButton {
                     visible: modeTabs.currentIndex === 0
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 64
                     text: "All"
                     enabled: sendController.resendMode
                     onClicked: sendController.clearResendFilter()
                 }
 
-                Button {
+                AppButton {
                     visible: modeTabs.currentIndex === 1
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 56
                     text: receiveController.scanning ? "Stop" : "Scan"
+                    primary: !receiveController.scanning
+                    danger: receiveController.scanning
                     enabled: receiveController.cameraAvailable || receiveController.scanning
                     onClicked: receiveController.scanning ? receiveController.stopScanning() : receiveController.startScanning()
                 }
 
-                Button {
+                AppButton {
                     visible: modeTabs.currentIndex === 1
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 56
                     text: "Reset"
                     onClicked: receiveController.reset()
                 }
 
-                Button {
+                AppButton {
                     visible: modeTabs.currentIndex === 1
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 80
+                    width: 110
                     text: receiveController.feedbackVisible ? "Hide FB" : "Feedback"
                     enabled: receiveController.feedbackVisible || receiveController.feedbackAvailable
                     onClicked: receiveController.feedbackVisible ? receiveController.hideFeedbackQr() : receiveController.showFeedbackQr()
                 }
 
-                Button {
+                AppButton {
                     visible: modeTabs.currentIndex === 1
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 56
                     text: "Save"
+                    primary: true
                     enabled: receiveController.completed
                     onClicked: Qt.platform.os === "android" ? receiveController.chooseSaveLocation() : saveDialog.open()
                 }
 
-                Button {
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 56
+                AppButton {
                     text: root.visibility === Window.FullScreen ? "Window" : "Full"
                     enabled: modeTabs.currentIndex === 0 ? sendController.frameCount > 0 : true
                     onClicked: root.visibility = root.visibility === Window.FullScreen ? Window.Windowed : Window.FullScreen
                 }
             }
 
-            RowLayout {
+            GridLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                columns: root.width < 820 ? 1 : 3
+                columnSpacing: 10
+                rowSpacing: 8
 
-                Label {
-                    text: "Speed"
-                    Layout.minimumWidth: 64
-                }
-
-                ComboBox {
-                    id: speedSelector
+                RowLayout {
                     Layout.fillWidth: true
-                    model: root.speedModeLabels
-                    currentIndex: sendController.speedMode
+                    spacing: 8
 
-                    onActivated: function(index) {
-                        currentIndex = index
-                        root.setTransferSpeedMode(index)
+                    Label {
+                        text: "Speed"
+                        color: root.mutedColor
+                        font.pixelSize: 12
+                        Layout.preferredWidth: 48
+                    }
+
+                    ComboBox {
+                        id: speedSelector
+                        Layout.fillWidth: true
+                        model: root.speedModeLabels
+                        currentIndex: sendController.speedMode
+
+                        onActivated: function(index) {
+                            currentIndex = index
+                            root.setTransferSpeedMode(index)
+                        }
                     }
                 }
-            }
 
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-
-                Label {
+                RowLayout {
                     Layout.fillWidth: true
-                    elide: Text.ElideMiddle
-                    text: modeTabs.currentIndex === 0 ? sendController.fileName : receiveController.fileName
+                    spacing: 8
+                    visible: modeTabs.currentIndex === 1 || sendController.feedbackScanning
+
+                    Label {
+                        text: "Camera"
+                        color: root.mutedColor
+                        font.pixelSize: 12
+                        Layout.preferredWidth: 48
+                    }
+
+                    ComboBox {
+                        id: cameraSelector
+                        Layout.fillWidth: true
+                        enabled: receiveMediaDevices.videoInputs.length > 0
+                        model: receiveMediaDevices.videoInputs
+                        textRole: "description"
+                        displayText: root.receiveCameraName(currentIndex)
+
+                        Component.onCompleted: root.selectReceiveCamera()
+
+                        onActivated: function(index) {
+                            var wasReceiveScanning = receiveController.scanning
+                            var wasFeedbackScanning = sendController.feedbackScanning
+                            if (wasReceiveScanning) {
+                                receiveController.stopScanning()
+                            }
+                            if (wasFeedbackScanning) {
+                                sendController.stopFeedbackScan()
+                            }
+
+                            currentIndex = index
+                            root.selectReceiveCamera()
+
+                            if (wasReceiveScanning) {
+                                Qt.callLater(receiveController.startScanning)
+                            }
+                            if (wasFeedbackScanning) {
+                                Qt.callLater(sendController.startFeedbackScan)
+                            }
+                        }
+                    }
                 }
 
-                Label {
-                    visible: modeTabs.currentIndex === 0
-                    text: sendController.frameCount > 0
-                        ? (sendController.currentFrameIndex + 1) + " / " + sendController.frameCount
-                        : "0 / 0"
-                }
-
-                Label {
-                    visible: modeTabs.currentIndex === 1
-                    text: receiveController.totalChunks > 0
-                        ? receiveController.receivedChunks + " / " + receiveController.totalChunks
-                        : "0 / 0"
-                }
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-                visible: modeTabs.currentIndex === 1
-
-                Label {
-                    text: "Camera"
-                    Layout.minimumWidth: 64
-                }
-
-                ComboBox {
-                    id: cameraSelector
+                RowLayout {
                     Layout.fillWidth: true
-                    enabled: receiveMediaDevices.videoInputs.length > 0
-                    model: receiveMediaDevices.videoInputs
-                    textRole: "description"
-                    displayText: root.receiveCameraName(currentIndex)
+                    spacing: 8
 
-                    Component.onCompleted: root.selectReceiveCamera()
+                    Label {
+                        Layout.fillWidth: true
+                        color: root.inkColor
+                        font.pixelSize: 13
+                        elide: Text.ElideMiddle
+                        text: modeTabs.currentIndex === 0 ? sendController.fileName : receiveController.fileName
+                    }
 
-                    onActivated: function(index) {
-                        var wasScanning = receiveController.scanning
-                        if (wasScanning) {
-                            receiveController.stopScanning()
-                        }
-
-                        currentIndex = index
-                        root.selectReceiveCamera()
-
-                        if (wasScanning) {
-                            Qt.callLater(receiveController.startScanning)
-                        }
+                    InfoPill {
+                        text: modeTabs.currentIndex === 0
+                            ? (sendController.frameCount > 0 ? (sendController.currentFrameIndex + 1) + " / " + sendController.frameCount : "0 / 0")
+                            : (receiveController.totalChunks > 0 ? receiveController.receivedChunks + " / " + receiveController.totalChunks : "0 / 0")
                     }
                 }
             }
@@ -308,19 +446,30 @@ ApplicationWindow {
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 16
+                anchors.margins: root.pagePadding
                 spacing: 12
 
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    color: "white"
-                    border.color: "#d0d0c8"
+                    radius: 8
+                    color: root.panelColor
+                    border.color: root.lineColor
                     border.width: 1
+                    clip: true
+
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        radius: 6
+                        color: "#fbfcf8"
+                        border.color: "#edf0ea"
+                        visible: !sendController.feedbackScanning
+                    }
 
                     Image {
                         anchors.centerIn: parent
-                        width: Math.min(parent.width - 48, parent.height - 48)
+                        width: Math.min(parent.width - 64, parent.height - 64)
                         height: width
                         fillMode: Image.PreserveAspectFit
                         smooth: false
@@ -332,6 +481,15 @@ ApplicationWindow {
                             : ""
                     }
 
+                    Label {
+                        anchors.centerIn: parent
+                        color: root.mutedColor
+                        font.pixelSize: 18
+                        font.weight: Font.Medium
+                        text: "No transfer loaded"
+                        visible: !sendController.feedbackScanning && sendController.frameCount <= 0
+                    }
+
                     VideoOutput {
                         id: sendFeedbackPreview
                         anchors.fill: parent
@@ -341,44 +499,77 @@ ApplicationWindow {
                         Component.onCompleted: sendController.attachFeedbackVideoSink(videoSink)
                     }
 
-                    Label {
-                        anchors.centerIn: parent
-                        color: "#f6f6f2"
-                        text: "Point camera at receiver feedback QR"
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        height: 52
+                        color: "#cc111111"
                         visible: sendController.feedbackScanning
-                        background: Rectangle {
-                            color: "#111111"
-                            opacity: 0.88
+
+                        Label {
+                            anchors.centerIn: parent
+                            color: "#f6f6f2"
+                            text: "Point camera at receiver feedback QR"
+                            font.pixelSize: 16
+                            font.weight: Font.Medium
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    InfoPill {
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.margins: 14
+                        visible: sendController.frameCount > 0 && !sendController.feedbackScanning
+                        text: sendController.resendMode ? "Resend loop" : sendController.speedModeName
+                        tone: sendController.resendMode ? "#fff0d8" : "#edf4ef"
+                        textColor: sendController.resendMode ? "#705021" : root.inkColor
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: root.width < 760 ? 126 : 104
+                    radius: 8
+                    color: root.panelColor
+                    border.color: root.lineColor
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: 10
+                        spacing: 10
+
+                        TextArea {
+                            id: sendTextInput
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            placeholderText: "Text"
+                            wrapMode: TextEdit.Wrap
+                            font.pixelSize: 14
+                            background: Rectangle {
+                                radius: 6
+                                color: "#fbfcf8"
+                                border.color: root.lineColor
+                            }
+                        }
+
+                        AppButton {
+                            width: root.width < 760 ? 104 : 132
+                            Layout.alignment: Qt.AlignVCenter
+                            text: "Prepare Text"
+                            primary: true
+                            enabled: sendTextInput.text.length > 0
+                            onClicked: sendController.prepareText(sendTextInput.text)
                         }
                     }
                 }
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 92
-                    spacing: 8
-
-                    TextArea {
-                        id: sendTextInput
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 84
-                        placeholderText: "Text"
-                        wrapMode: TextEdit.Wrap
-                    }
-
-                    Button {
-                        Layout.preferredWidth: 128
-                        Layout.alignment: Qt.AlignVCenter
-                        text: "Prepare Text"
-                        enabled: sendTextInput.text.length > 0
-                        onClicked: sendController.prepareText(sendTextInput.text)
-                    }
-                }
-
-                Label {
-                    Layout.fillWidth: true
-                    elide: Text.ElideRight
+                StatusStrip {
                     text: sendController.status
+                    alert: sendController.status.indexOf("denied") >= 0
+                        || sendController.status.indexOf("rejected") >= 0
+                        || sendController.status.indexOf("failed") >= 0
                 }
             }
         }
@@ -389,21 +580,24 @@ ApplicationWindow {
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 16
+                anchors.margins: root.pagePadding
                 spacing: 12
 
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    color: "#111111"
-                    border.color: "#2c2c2c"
+                    radius: 8
+                    color: "#141816"
+                    border.color: "#2b312e"
                     border.width: 1
+                    clip: true
 
                     VideoOutput {
                         id: receivePreview
                         anchors.fill: parent
                         fillMode: VideoOutput.PreserveAspectCrop
-                        visible: receiveController.scanning && !receiveController.feedbackVisible
+                        visible: !receiveController.feedbackVisible
+                            && (receiveController.scanning || (root.androidCameraHot && modeTabs.currentIndex === 1))
 
                         Component.onCompleted: {
                             receiveController.attachVideoSink(videoSink)
@@ -415,7 +609,7 @@ ApplicationWindow {
 
                     Image {
                         anchors.centerIn: parent
-                        width: Math.min(parent.width - 48, parent.height - 48)
+                        width: Math.min(parent.width - 64, parent.height - 64)
                         height: width
                         fillMode: Image.PreserveAspectFit
                         smooth: false
@@ -430,99 +624,155 @@ ApplicationWindow {
                     Label {
                         anchors.centerIn: parent
                         color: "#f6f6f2"
+                        font.pixelSize: 18
+                        font.weight: Font.Medium
                         text: receiveController.cameraAvailable
                             ? (receiveController.scanning || receiveController.feedbackVisible ? "" : "Camera ready")
                             : "No camera available"
                         visible: text.length > 0
                     }
+
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        height: 58
+                        color: "#cc111111"
+                        visible: receiveController.scanning || receiveController.feedbackVisible || receiveController.completed
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 14
+                            anchors.rightMargin: 14
+                            spacing: 12
+
+                            ProgressBar {
+                                Layout.fillWidth: true
+                                from: 0
+                                to: 1
+                                value: receiveController.progress
+                            }
+
+                            Label {
+                                color: "#f6f6f2"
+                                font.pixelSize: 13
+                                text: receiveController.totalChunks > 0
+                                    ? receiveController.receivedChunks + " / " + receiveController.totalChunks
+                                    : "0 / 0"
+                            }
+                        }
+                    }
                 }
 
-                ProgressBar {
-                    Layout.fillWidth: true
-                    from: 0
-                    to: 1
-                    value: receiveController.progress
-                }
-
-                Label {
-                    Layout.fillWidth: true
-                    elide: Text.ElideRight
+                StatusStrip {
                     text: receiveController.status
+                    alert: receiveController.lastError.length > 0
                 }
 
-                RowLayout {
+                Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 112
-                    spacing: 8
+                    radius: 8
+                    color: root.panelColor
+                    border.color: root.lineColor
                     visible: receiveController.receivedTextAvailable
 
-                    TextArea {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 104
-                        readOnly: true
-                        wrapMode: TextEdit.Wrap
-                        text: receiveController.receivedText
-                    }
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: 10
+                        spacing: 10
 
-                    Button {
-                        Layout.preferredWidth: 96
-                        Layout.alignment: Qt.AlignVCenter
-                        text: "Copy"
-                        onClicked: receiveController.copyReceivedText()
+                        TextArea {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            readOnly: true
+                            wrapMode: TextEdit.Wrap
+                            text: receiveController.receivedText
+                            font.pixelSize: 14
+                            background: Rectangle {
+                                radius: 6
+                                color: "#fbfcf8"
+                                border.color: root.lineColor
+                            }
+                        }
+
+                        AppButton {
+                            width: 96
+                            Layout.alignment: Qt.AlignVCenter
+                            text: "Copy"
+                            primary: true
+                            onClicked: receiveController.copyReceivedText()
+                        }
                     }
                 }
 
-                GridLayout {
+                Rectangle {
                     Layout.fillWidth: true
-                    columns: width > 720 ? 3 : 2
-                    columnSpacing: 16
-                    rowSpacing: 4
+                    Layout.preferredHeight: root.width < 760 ? 118 : 78
+                    radius: 8
+                    color: root.panelColor
+                    border.color: root.lineColor
 
-                    Label {
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
-                        font.pixelSize: 12
-                        text: "Video frames: " + receiveController.videoFrameCount
-                    }
+                    GridLayout {
+                        anchors.fill: parent
+                        anchors.margins: 10
+                        columns: root.width > 900 ? 6 : 3
+                        columnSpacing: 12
+                        rowSpacing: 6
 
-                    Label {
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
-                        font.pixelSize: 12
-                        text: "Decode attempts: " + receiveController.decodeAttemptCount
-                    }
+                        Label {
+                            Layout.fillWidth: true
+                            color: root.mutedColor
+                            elide: Text.ElideRight
+                            font.pixelSize: 12
+                            text: "Video " + receiveController.videoFrameCount
+                        }
 
-                    Label {
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
-                        font.pixelSize: 12
-                        text: "Decode failures: " + receiveController.decodeFailureCount
-                    }
+                        Label {
+                            Layout.fillWidth: true
+                            color: root.mutedColor
+                            elide: Text.ElideRight
+                            font.pixelSize: 12
+                            text: "Attempts " + receiveController.decodeAttemptCount
+                        }
 
-                    Label {
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
-                        font.pixelSize: 12
-                        text: "QR decoded: " + receiveController.decodedQrFrameCount
-                    }
+                        Label {
+                            Layout.fillWidth: true
+                            color: root.mutedColor
+                            elide: Text.ElideRight
+                            font.pixelSize: 12
+                            text: "Failures " + receiveController.decodeFailureCount
+                        }
 
-                    Label {
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
-                        font.pixelSize: 12
-                        text: "QR accepted: " + receiveController.acceptedQrFrameCount
-                    }
+                        Label {
+                            Layout.fillWidth: true
+                            color: root.mutedColor
+                            elide: Text.ElideRight
+                            font.pixelSize: 12
+                            text: "Decoded " + receiveController.decodedQrFrameCount
+                        }
 
-                    Label {
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
-                        font.pixelSize: 12
-                        text: "QR rejected: " + receiveController.rejectedQrFrameCount
+                        Label {
+                            Layout.fillWidth: true
+                            color: root.mutedColor
+                            elide: Text.ElideRight
+                            font.pixelSize: 12
+                            text: "Accepted " + receiveController.acceptedQrFrameCount
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            color: root.mutedColor
+                            elide: Text.ElideRight
+                            font.pixelSize: 12
+                            text: "Rejected " + receiveController.rejectedQrFrameCount
+                        }
                     }
                 }
 
                 Label {
                     Layout.fillWidth: true
+                    color: "#80382f"
                     elide: Text.ElideRight
                     font.pixelSize: 12
                     visible: receiveController.lastError.length > 0
@@ -531,6 +781,7 @@ ApplicationWindow {
 
                 Label {
                     Layout.fillWidth: true
+                    color: root.mutedColor
                     elide: Text.ElideMiddle
                     font.pixelSize: 12
                     visible: receiveController.lastSavedPath.length > 0
