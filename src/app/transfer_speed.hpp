@@ -25,9 +25,9 @@ struct TransferSpeedProfile {
 inline constexpr int kDefaultTransferSpeedMode = 0;
 
 inline constexpr std::array<TransferSpeedProfile, AIRGAP_HAS_CIMBAR ? 4U : 3U> kTransferSpeedProfiles{{
-    {"Safe", 512, 250, 150, VisualTransferCodec::Qr},
-    {"Balanced", 768, 200, 120, VisualTransferCodec::Qr},
-    {"Fast", 896, 150, 100, VisualTransferCodec::Qr},
+    {"Safe", 256, 300, 180, VisualTransferCodec::Qr},
+    {"Balanced", 384, 240, 150, VisualTransferCodec::Qr},
+    {"Fast", 512, 180, 120, VisualTransferCodec::Qr},
 #if AIRGAP_HAS_CIMBAR
     {"Cimbar", 0, 90, 120, VisualTransferCodec::Cimbar},
 #endif

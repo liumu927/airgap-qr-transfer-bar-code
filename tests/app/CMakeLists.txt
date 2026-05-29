@@ -7,7 +7,7 @@ add_executable(airgap_app_tests
 target_link_libraries(airgap_app_tests PRIVATE airgap_app_core)
 
 if(MSVC)
-    target_compile_options(airgap_app_tests PRIVATE /W4 /permissive-)
+    target_compile_options(airgap_app_tests PRIVATE /W4 /permissive- /utf-8)
 else()
     target_compile_options(airgap_app_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()

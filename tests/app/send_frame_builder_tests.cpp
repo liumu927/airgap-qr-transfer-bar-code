@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <limits>
+#include <string>
 #include <string_view>
 #include <variant>
 
@@ -67,6 +68,14 @@ Bytes repeated_file_bytes(std::size_t size)
         bytes[i] = static_cast<std::uint8_t>(i % 251);
     }
     return bytes;
+}
+
+std::string utf8(std::u8string_view value)
+{
+    return {
+        reinterpret_cast<const char*>(value.data()),
+        value.size(),
+    };
 }
 
 void test_build_send_package_generates_manifest_data_and_end_frames()
@@ -153,9 +162,9 @@ void test_transfer_speed_profiles_are_ordered_and_safe_by_default()
     const auto& balanced = transfer_speed_profile(1);
     const auto& fast = transfer_speed_profile(2);
 
-    require(safe.chunk_size == 512, "Safe mode should keep the original chunk size");
-    require(safe.playback_interval_ms == 250, "Safe mode should keep the original playback interval");
-    require(safe.decode_interval_ms == 150, "Safe mode should keep the original decode interval");
+    require(safe.chunk_size == 256, "Safe mode should favor low-density QR frames");
+    require(safe.playback_interval_ms == 300, "Safe mode should give cameras more time per frame");
+    require(safe.decode_interval_ms == 180, "Safe mode should avoid overloading camera frame conversion");
     require(balanced.chunk_size > safe.chunk_size, "Balanced should carry more data than Safe");
     require(fast.chunk_size > balanced.chunk_size, "Fast should carry more data than Balanced");
     require(balanced.playback_interval_ms < safe.playback_interval_ms, "Balanced should play faster than Safe");
@@ -278,6 +287,57 @@ void test_text_payload_reuses_file_transfer_flow()
     require(received.assembled_bytes == text_bytes, "received text bytes should match sent UTF-8 bytes");
 }
 
+void test_long_utf8_text_payload_reassembles_exact_bytes()
+{
+    const std::string paragraph = utf8(u8R"(🐍 北京常备抗蛇毒血清医院（2026）
+
+核心医院（唯一常备4种血清）
+
+- 解放军总医院第四医学中心（原304医院）- 地址：海淀区阜成路51号
+- 血清：抗蝮蛇、五步蛇、银环蛇、眼镜蛇毒血清（全品类）
+- 定位：华北蛇伤救治中心，24小时待命
+
+其他可调用/储备血清医院（备用）
+
+1. 北京协和医院（东单）：抗蝮蛇、眼镜蛇血清
+2. 北京大学人民医院（西直门）：抗蝮蛇血清
+3. 首都医科大学附属北京朝阳医院：抗蝮蛇血清
+4. 北京京煤集团总医院（门头沟）：抗蝮蛇血清
+
+⚠️ 紧急建议
+
+- 被咬伤立即打120，说明“蛇咬伤”，优先送304医院
+- 记住蛇外形/拍照，勿吸毒、勿切开、勿冰敷
+- 北京本地毒蛇以短尾蝮为主，对应抗蝮蛇毒血清最常用
+
+需要我把这些医院的急诊电话和就诊注意事项整理给你吗？
+)");
+    const std::string text = paragraph + paragraph;
+    const Bytes text_bytes(text.begin(), text.end());
+    const LimitOnlyQrEncoder encoder(kDefaultQrPayloadLimit);
+    const auto result = build_send_package(
+        generate_session_id(),
+        "message.txt",
+        text_bytes,
+        transfer_speed_profile(0).chunk_size,
+        encoder,
+        kManifestFlagTextMessage);
+
+    require(result.ok(), result.message);
+    require(result.package.manifest.total_chunks > 1, "long UTF-8 text should span multiple QR data frames");
+
+    ReceiveFrameCollector collector;
+    ReceiveFrameResult received;
+    for (const auto& payload : result.package.payloads) {
+        received = collector.add_payload(payload);
+        require(received.ok(), received.message);
+    }
+
+    require(received.completed, "long UTF-8 text transfer should complete");
+    require(received.text_message, "long UTF-8 text transfer should preserve the text flag");
+    require(received.assembled_bytes == text_bytes, "long UTF-8 text bytes should round trip exactly");
+}
+
 } // namespace
 
 void run_receive_frame_collector_tests();
@@ -295,6 +355,7 @@ int main()
     test_cimbar_payload_rejects_corruption();
     test_cimbar_payload_rejects_name_that_exceeds_u16();
     test_text_payload_reuses_file_transfer_flow();
+    test_long_utf8_text_payload_reassembles_exact_bytes();
     run_receive_frame_collector_tests();
     run_qr_loopback_tests();
 
