@@ -67,13 +67,13 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "== Copy non-Qt runtime dependencies =="
 $BuildDir = Split-Path -Parent $ResolvedBuildExe
-$NonQtDlls = @("qrencode.dll")
+$NonQtDlls = Get-ChildItem -LiteralPath $BuildDir -Filter "*.dll" |
+    Where-Object { $_.Name -notlike "Qt6*.dll" }
+if ($NonQtDlls.Count -eq 0) {
+    throw "No non-Qt runtime DLLs were found next to the built app: $BuildDir"
+}
 foreach ($dll in $NonQtDlls) {
-    $source = Join-Path $BuildDir $dll
-    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
-        throw "Required runtime dependency not found: $source"
-    }
-    Copy-Item -LiteralPath $source -Destination (Join-Path $PackageDir $dll) -Force
+    Copy-Item -LiteralPath $dll.FullName -Destination (Join-Path $PackageDir $dll.Name) -Force
 }
 
 Write-Host "== Add VC++ runtime installer =="
