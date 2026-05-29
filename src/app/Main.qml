@@ -530,10 +530,11 @@ ApplicationWindow {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: root.width < 760 ? 126 : 104
+                    Layout.preferredHeight: visible ? (root.width < 760 ? 126 : 104) : 0
                     radius: 8
                     color: root.panelColor
                     border.color: root.lineColor
+                    visible: !sendController.playing && !sendController.feedbackScanning
 
                     RowLayout {
                         anchors.fill: parent

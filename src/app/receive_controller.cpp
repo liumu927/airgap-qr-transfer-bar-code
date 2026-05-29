@@ -34,6 +34,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -90,6 +91,68 @@ QString decode_utf8_text(const aqrt::core::Bytes& bytes)
         return {};
     }
     return text;
+}
+
+aqrt::qr::QrRasterImage centered_crop(
+    const aqrt::qr::QrRasterImage& image,
+    std::uint32_t width_percent,
+    std::uint32_t height_percent)
+{
+    if (!aqrt::qr::is_valid_raster_image_shape(image)
+        || width_percent == 0U
+        || height_percent == 0U
+        || width_percent >= 100U
+        || height_percent >= 100U) {
+        return {};
+    }
+
+    aqrt::qr::QrRasterImage cropped;
+    cropped.width = std::max<std::uint32_t>(64U, image.width * width_percent / 100U);
+    cropped.height = std::max<std::uint32_t>(64U, image.height * height_percent / 100U);
+    cropped.width = std::min(cropped.width, image.width);
+    cropped.height = std::min(cropped.height, image.height);
+
+    const std::uint32_t offset_x = (image.width - cropped.width) / 2U;
+    const std::uint32_t offset_y = (image.height - cropped.height) / 2U;
+    cropped.luminance.resize(static_cast<std::size_t>(cropped.width) * cropped.height);
+
+    for (std::uint32_t y = 0; y < cropped.height; ++y) {
+        const auto source_begin =
+            image.luminance.begin()
+            + static_cast<std::ptrdiff_t>(static_cast<std::size_t>(offset_y + y) * image.width + offset_x);
+        const auto target_begin =
+            cropped.luminance.begin()
+            + static_cast<std::ptrdiff_t>(static_cast<std::size_t>(y) * cropped.width);
+        std::copy(source_begin, source_begin + cropped.width, target_begin);
+    }
+
+    return cropped;
+}
+
+aqrt::qr::DecodeResult decode_qr_with_fallback_crops(const aqrt::qr::QrRasterImage& image)
+{
+    const aqrt::qr::ZxingQrDecoderAdapter decoder;
+    auto decoded = decoder.decode(image);
+    if (decoded.ok()) {
+        return decoded;
+    }
+
+    const std::pair<std::uint32_t, std::uint32_t> crop_windows[] = {
+        {85U, 85U},
+        {70U, 70U},
+        {55U, 55U},
+        {45U, 70U},
+    };
+
+    for (const auto& crop : crop_windows) {
+        const auto cropped = centered_crop(image, crop.first, crop.second);
+        decoded = decoder.decode(cropped);
+        if (decoded.ok()) {
+            return decoded;
+        }
+    }
+
+    return decoded;
 }
 
 #ifdef Q_OS_ANDROID
@@ -879,8 +942,7 @@ void ReceiveController::decodeVideoRaster(aqrt::qr::QrRasterImage raster)
         return;
     }
 
-    const aqrt::qr::ZxingQrDecoderAdapter decoder;
-    const auto decoded = decoder.decode(raster);
+    const auto decoded = decode_qr_with_fallback_crops(raster);
     if (!decoded.ok()) {
         ++decode_failure_count_;
         emit stateChanged();
