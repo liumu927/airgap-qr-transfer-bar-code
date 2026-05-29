@@ -159,13 +159,13 @@ The app also accepts these direct startup arguments:
 The speed modes are intended for controlled throughput testing:
 
 ```text
-safe:     256 byte chunks, 300 ms playback interval, 180 ms decode interval
-balanced: 384 byte chunks, 240 ms playback interval, 150 ms decode interval
-fast:     512 byte chunks, 180 ms playback interval, 120 ms decode interval
+safe:     128 byte chunks, 450 ms playback interval, 220 ms decode interval
+balanced: 256 byte chunks, 300 ms playback interval, 180 ms decode interval
+fast:     384 byte chunks, 240 ms playback interval, 150 ms decode interval
 cimbar:   experimental high-density color barcode mode, available only in AIRGAP_ENABLE_CIMBAR builds
 ```
 
-Use `safe` as the compatibility baseline, especially for Android-to-Windows transfers and long UTF-8 text. Then compare `balanced` and `fast` on the same sender, receiver, camera, brightness, and file size.
+Use `safe` as the compatibility baseline, especially for Android-to-Windows transfers and long UTF-8 text. It intentionally uses smaller, lower-density QR frames and slower playback. Then compare `balanced` and `fast` on the same sender, receiver, camera, brightness, and file size.
 
 Record the result:
 

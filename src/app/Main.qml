@@ -469,7 +469,7 @@ ApplicationWindow {
 
                     Image {
                         anchors.centerIn: parent
-                        width: Math.min(parent.width - 64, parent.height - 64)
+                        width: Math.max(32, Math.min(parent.width, parent.height) - (Qt.platform.os === "android" ? 16 : 32))
                         height: width
                         fillMode: Image.PreserveAspectFit
                         smooth: false
@@ -609,7 +609,7 @@ ApplicationWindow {
 
                     Image {
                         anchors.centerIn: parent
-                        width: Math.min(parent.width - 64, parent.height - 64)
+                        width: Math.max(32, Math.min(parent.width, parent.height) - (Qt.platform.os === "android" ? 16 : 32))
                         height: width
                         fillMode: Image.PreserveAspectFit
                         smooth: false

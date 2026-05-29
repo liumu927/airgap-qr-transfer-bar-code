@@ -162,9 +162,9 @@ void test_transfer_speed_profiles_are_ordered_and_safe_by_default()
     const auto& balanced = transfer_speed_profile(1);
     const auto& fast = transfer_speed_profile(2);
 
-    require(safe.chunk_size == 256, "Safe mode should favor low-density QR frames");
-    require(safe.playback_interval_ms == 300, "Safe mode should give cameras more time per frame");
-    require(safe.decode_interval_ms == 180, "Safe mode should avoid overloading camera frame conversion");
+    require(safe.chunk_size == 128, "Safe mode should favor low-density QR frames");
+    require(safe.playback_interval_ms == 450, "Safe mode should give cameras more time per frame");
+    require(safe.decode_interval_ms == 220, "Safe mode should avoid overloading camera frame conversion");
     require(balanced.chunk_size > safe.chunk_size, "Balanced should carry more data than Safe");
     require(fast.chunk_size > balanced.chunk_size, "Fast should carry more data than Balanced");
     require(balanced.playback_interval_ms < safe.playback_interval_ms, "Balanced should play faster than Safe");
@@ -325,6 +325,7 @@ void test_long_utf8_text_payload_reassembles_exact_bytes()
 
     require(result.ok(), result.message);
     require(result.package.manifest.total_chunks > 1, "long UTF-8 text should span multiple QR data frames");
+    require(result.package.manifest.chunk_size == 128, "Safe long text should use low-density QR chunks");
 
     ReceiveFrameCollector collector;
     ReceiveFrameResult received;
