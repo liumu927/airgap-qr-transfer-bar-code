@@ -12,3 +12,5 @@ android-*.log
 android-received-*.txt
 windows-*.png
 airgap_*.png
+build-log.txt
+cmake-output.txt
