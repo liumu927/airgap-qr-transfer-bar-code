@@ -20,7 +20,6 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QIODevice>
-#include <QPermissions>
 #include <QStringDecoder>
 #include <QStandardPaths>
 #include <QVideoSink>
@@ -28,6 +27,7 @@
 #ifdef Q_OS_ANDROID
 #include <QJniEnvironment>
 #include <QJniObject>
+#include <QPermissions>
 #include <QtCore/qcoreapplication_platform.h>
 #include <QtCore/private/qandroidextras_p.h>
 #endif
@@ -351,6 +351,7 @@ QString ReceiveController::feedbackStatus() const
 void ReceiveController::startScanning()
 {
     qInfo() << "AirGapReceive startScanning requested";
+#ifdef Q_OS_ANDROID
     if (auto* app = QCoreApplication::instance()) {
         const QCameraPermission camera_permission;
         const auto permission_status = app->checkPermission(camera_permission);
@@ -380,6 +381,7 @@ void ReceiveController::startScanning()
             return;
         }
     }
+#endif
 
     refreshCameraAvailability();
     qInfo() << "AirGapReceive camera available" << camera_available_;
