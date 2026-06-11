@@ -16,13 +16,13 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QIODevice>
-#include <QPermissions>
 #include <QUrl>
 #include <QVideoSink>
 
 #ifdef Q_OS_ANDROID
 #include <QJniEnvironment>
 #include <QJniObject>
+#include <QPermissions>
 #include <QtCore/qcoreapplication_platform.h>
 #include <QtCore/private/qandroidextras_p.h>
 #endif
@@ -35,6 +35,50 @@
 #include <variant>
 
 namespace {
+
+// Base64 编码包装器：将二进制帧 payload 转为纯 ASCII 文本（"B64:" 前缀 + Base64）
+// 解决扫描器作为文本设备传输时丢失非 ASCII 字节的问题
+constexpr char kBase64Prefix[] = "B64:";
+
+const char kBase64Table[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+std::string base64_encode(const aqrt::core::Bytes& data)
+{
+    std::string result;
+    result.reserve(4 + ((data.size() + 2) / 3) * 4);
+    result.append(kBase64Prefix);
+    for (std::size_t i = 0; i < data.size(); i += 3) {
+        const auto b0 = static_cast<unsigned>(data[i]);
+        const auto b1 = (i + 1 < data.size()) ? static_cast<unsigned>(data[i + 1]) : 0U;
+        const auto b2 = (i + 2 < data.size()) ? static_cast<unsigned>(data[i + 2]) : 0U;
+        const auto triple = (b0 << 16) | (b1 << 8) | b2;
+
+        result += kBase64Table[(triple >> 18) & 0x3F];
+        result += kBase64Table[(triple >> 12) & 0x3F];
+        result += (i + 1 < data.size()) ? kBase64Table[(triple >> 6) & 0x3F] : '=';
+        result += (i + 2 < data.size()) ? kBase64Table[triple & 0x3F] : '=';
+    }
+    return result;
+}
+
+class Base64QrEncoder final : public aqrt::qr::IQrEncoder {
+public:
+    explicit Base64QrEncoder(const aqrt::qr::IQrEncoder& inner) : inner_(inner) {}
+
+    aqrt::qr::EncodeResult encode(const aqrt::core::Bytes& payload) const override
+    {
+        // 将整个二进制帧 Base64 编码为纯 ASCII 文本
+        const std::string encoded = base64_encode(payload);
+        aqrt::core::Bytes wrapped(encoded.begin(), encoded.end());
+        return inner_.encode(wrapped);
+    }
+
+    [[nodiscard]] std::size_t max_payload_size() const override { return inner_.max_payload_size(); }
+
+private:
+    const aqrt::qr::IQrEncoder& inner_;
+};
 
 #ifdef Q_OS_ANDROID
 constexpr int kAndroidOpenDocumentRequestCode = 4201;
@@ -341,6 +385,20 @@ bool SendController::cimbarAvailable() const
     return aqrt::qr::cimbar_backend_available();
 }
 
+bool SendController::scannerMode() const
+{
+    return scanner_mode_;
+}
+
+void SendController::setScannerMode(bool enabled)
+{
+    if (scanner_mode_ == enabled) {
+        return;
+    }
+    scanner_mode_ = enabled;
+    emit stateChanged();
+}
+
 void SendController::chooseOpenFile()
 {
 #ifdef Q_OS_ANDROID
@@ -470,7 +528,11 @@ void SendController::prepareBytes(QString file_name, const QByteArray& data, boo
         return;
     }
 
-    const aqrt::qr::LibQrEncodeAdapter encoder(aqrt::app::kDefaultQrPayloadLimit);
+    const aqrt::qr::LibQrEncodeAdapter real_encoder(aqrt::app::kDefaultQrPayloadLimit);
+    const Base64QrEncoder base64_encoder(real_encoder);
+    const aqrt::qr::IQrEncoder& encoder = scanner_mode_
+        ? static_cast<const aqrt::qr::IQrEncoder&>(base64_encoder)
+        : static_cast<const aqrt::qr::IQrEncoder&>(real_encoder);
     auto build_result = aqrt::app::build_send_package(
         session_id,
         std::string(file_name_utf8.constData(), static_cast<std::size_t>(file_name_utf8.size())),
@@ -587,6 +649,7 @@ void SendController::startFeedbackScan()
     }
 
     stopPlayback();
+#ifdef Q_OS_ANDROID
     if (auto* app = QCoreApplication::instance()) {
         const QCameraPermission camera_permission;
         const auto permission_status = app->checkPermission(camera_permission);
@@ -611,6 +674,7 @@ void SendController::startFeedbackScan()
             return;
         }
     }
+#endif
 
     feedback_decode_pending_.store(false);
     feedback_scanning_.store(true);

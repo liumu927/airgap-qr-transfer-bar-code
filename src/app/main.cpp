@@ -1,5 +1,6 @@
 #include "qr_image_provider.hpp"
 #include "receive_controller.hpp"
+#include "scanner_receive_controller.hpp"
 #include "send_controller.hpp"
 #include "transfer_speed.hpp"
 
@@ -101,6 +102,15 @@ int main(int argc, char* argv[])
         QStringLiteral("Select transfer speed: safe, balanced, fast, or cimbar when that backend is enabled."),
         QStringLiteral("mode"),
     });
+    parser.addOption({
+        QStringLiteral("scanner-mode"),
+        QStringLiteral("Use scanner mode for receiving (serial port instead of camera)."),
+    });
+    parser.addOption({
+        QStringLiteral("port"),
+        QStringLiteral("Select the serial port for scanner mode."),
+        QStringLiteral("name"),
+    });
     parser.process(app);
 
     QQmlApplicationEngine engine;
@@ -111,11 +121,19 @@ int main(int argc, char* argv[])
 
     SendController send_controller(image_provider);
     ReceiveController receive_controller(feedback_image_provider);
+    aqrt::app::ScannerReceiveController scanner_receive_controller;
     const int startup_speed_mode = parse_speed_mode(parser.value(QStringLiteral("speed-mode")));
     send_controller.setSpeedMode(startup_speed_mode);
     receive_controller.setSpeedMode(startup_speed_mode);
+
+    // 扫描器模式串口选择
+    if (parser.isSet(QStringLiteral("port"))) {
+        scanner_receive_controller.selectPort(parser.value(QStringLiteral("port")));
+    }
+
     engine.rootContext()->setContextProperty(QStringLiteral("sendController"), &send_controller);
     engine.rootContext()->setContextProperty(QStringLiteral("receiveController"), &receive_controller);
+    engine.rootContext()->setContextProperty(QStringLiteral("scannerReceiveController"), &scanner_receive_controller);
     engine.rootContext()->setContextProperty(
         QStringLiteral("startupMode"),
         parser.isSet(QStringLiteral("receive")) ? 1 : 0);
@@ -130,6 +148,9 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(
         QStringLiteral("startupCameraIndex"),
         camera_index_ok ? startup_camera_index : -1);
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("startupScannerMode"),
+        parser.isSet(QStringLiteral("scanner-mode")));
 
     bool auto_saved_received_file = false;
     const QString auto_save_dir = parser.value(QStringLiteral("save-dir"));

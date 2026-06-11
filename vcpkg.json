@@ -17,7 +17,8 @@
             "freetype",
             "gui",
             "png",
-            "thread"
+            "thread",
+            "serialport"
           ]
         },
         "qtdeclarative"

@@ -32,6 +32,7 @@ class SendController final : public QObject {
     Q_PROPERTY(QString speedModeName READ speedModeName NOTIFY stateChanged)
     Q_PROPERTY(QStringList speedModeLabels READ speedModeLabels CONSTANT)
     Q_PROPERTY(bool cimbarAvailable READ cimbarAvailable CONSTANT)
+    Q_PROPERTY(bool scannerMode READ scannerMode WRITE setScannerMode NOTIFY stateChanged)
 
 public:
     explicit SendController(QrImageProvider* image_provider, QObject* parent = nullptr);
@@ -48,6 +49,8 @@ public:
     [[nodiscard]] QString speedModeName() const;
     [[nodiscard]] QStringList speedModeLabels() const;
     [[nodiscard]] bool cimbarAvailable() const;
+    [[nodiscard]] bool scannerMode() const;
+    void setScannerMode(bool enabled);
 
     Q_INVOKABLE void chooseOpenFile();
     Q_INVOKABLE void prepareFile(const QUrl& file_url);
@@ -94,4 +97,5 @@ private:
     bool playing_ = false;
     bool resend_mode_ = false;
     bool has_package_ = false;
+    bool scanner_mode_ = false;
 };

@@ -19,6 +19,7 @@ ApplicationWindow {
     property bool receiveCameraInitialized: false
     property var speedModeLabels: sendController.speedModeLabels
     readonly property bool androidCameraHot: Qt.platform.os === "android"
+    property bool scannerMode: false
 
     readonly property int pagePadding: width < 760 ? 12 : 18
     readonly property color accentColor: "#2f7d63"
@@ -34,6 +35,15 @@ ApplicationWindow {
         if (startupFullScreen) {
             root.visibility = Window.FullScreen
         }
+        if (startupScannerMode) {
+            root.scannerMode = true
+        }
+    }
+
+    Binding {
+        target: sendController
+        property: "scannerMode"
+        value: root.scannerMode
     }
 
     component AppButton: Button {
@@ -137,6 +147,12 @@ ApplicationWindow {
         id: saveDialog
         fileMode: FileDialog.SaveFile
         onAccepted: receiveController.saveToFile(selectedFile)
+    }
+
+    FileDialog {
+        id: scannerSaveDialog
+        fileMode: FileDialog.SaveFile
+        onAccepted: scannerReceiveController.saveToFile(selectedFile)
     }
 
     MediaDevices {
@@ -249,6 +265,42 @@ ApplicationWindow {
                     TabButton { text: "Send" }
                     TabButton { text: "Receive" }
                 }
+
+                // 模式切换（全局可见）
+                RowLayout {
+                    Layout.alignment: Qt.AlignVCenter
+                    spacing: 4
+
+                    Label {
+                        text: "Mode"
+                        color: root.mutedColor
+                        font.pixelSize: 12
+                    }
+
+                    RadioButton {
+                        id: globalCameraModeRadio
+                        text: "Camera"
+                        checked: !root.scannerMode
+                        font.pixelSize: 12
+                        onCheckedChanged: {
+                            if (checked) {
+                                root.scannerMode = false
+                            }
+                        }
+                    }
+
+                    RadioButton {
+                        id: globalScannerModeRadio
+                        text: "Scanner"
+                        checked: root.scannerMode
+                        font.pixelSize: 12
+                        onCheckedChanged: {
+                            if (checked) {
+                                root.scannerMode = true
+                            }
+                        }
+                    }
+                }
             }
 
             Flow {
@@ -301,8 +353,9 @@ ApplicationWindow {
                     onClicked: sendController.clearResendFilter()
                 }
 
+                // 摄像头模式 - 接收端控制
                 AppButton {
-                    visible: modeTabs.currentIndex === 1
+                    visible: modeTabs.currentIndex === 1 && !root.scannerMode
                     text: receiveController.scanning ? "Stop" : "Scan"
                     primary: !receiveController.scanning
                     danger: receiveController.scanning
@@ -311,13 +364,13 @@ ApplicationWindow {
                 }
 
                 AppButton {
-                    visible: modeTabs.currentIndex === 1
+                    visible: modeTabs.currentIndex === 1 && !root.scannerMode
                     text: "Reset"
                     onClicked: receiveController.reset()
                 }
 
                 AppButton {
-                    visible: modeTabs.currentIndex === 1
+                    visible: modeTabs.currentIndex === 1 && !root.scannerMode
                     width: 110
                     text: receiveController.feedbackVisible ? "Hide FB" : "Feedback"
                     enabled: receiveController.feedbackVisible || receiveController.feedbackAvailable
@@ -325,11 +378,43 @@ ApplicationWindow {
                 }
 
                 AppButton {
-                    visible: modeTabs.currentIndex === 1
+                    visible: modeTabs.currentIndex === 1 && !root.scannerMode
                     text: "Save"
                     primary: true
                     enabled: receiveController.completed
                     onClicked: Qt.platform.os === "android" ? receiveController.chooseSaveLocation() : saveDialog.open()
+                }
+
+                // 扫描器模式 - 接收端控制
+                AppButton {
+                    visible: modeTabs.currentIndex === 1 && root.scannerMode
+                    text: scannerReceiveController.scanning ? "Stop" : "Start Scan"
+                    primary: !scannerReceiveController.scanning
+                    danger: scannerReceiveController.scanning
+                    enabled: scannerReceiveController.selectedPort.length > 0 || scannerReceiveController.scanning
+                    onClicked: scannerReceiveController.scanning ? scannerReceiveController.stopScanning() : scannerReceiveController.startScanning()
+                }
+
+                AppButton {
+                    visible: modeTabs.currentIndex === 1 && root.scannerMode
+                    text: "Reset"
+                    enabled: !scannerReceiveController.scanning
+                    onClicked: scannerReceiveController.reset()
+                }
+
+                AppButton {
+                    visible: modeTabs.currentIndex === 1 && root.scannerMode
+                    text: "Save"
+                    primary: true
+                    enabled: scannerReceiveController.completed
+                    onClicked: scannerSaveDialog.open()
+                }
+
+                AppButton {
+                    visible: modeTabs.currentIndex === 1 && root.scannerMode
+                    text: "Copy Text"
+                    enabled: scannerReceiveController.receivedTextAvailable
+                    onClicked: scannerReceiveController.copyReceivedText()
                 }
 
                 AppButton {
@@ -344,6 +429,35 @@ ApplicationWindow {
                 columns: root.width < 820 ? 1 : 3
                 columnSpacing: 10
                 rowSpacing: 8
+
+                // 串口选择（扫描器模式）
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    visible: root.scannerMode && modeTabs.currentIndex === 1
+
+                    Label {
+                        text: "Port"
+                        color: root.mutedColor
+                        font.pixelSize: 12
+                        Layout.preferredWidth: 48
+                    }
+
+                    ComboBox {
+                        id: portSelector
+                        Layout.fillWidth: true
+                        model: scannerReceiveController.availablePorts
+                        onActivated: function(index) {
+                            scannerReceiveController.selectPort(model[index])
+                        }
+                    }
+
+                    AppButton {
+                        width: 64
+                        text: "Refresh"
+                        onClicked: scannerReceiveController.refreshPorts()
+                    }
+                }
 
                 RowLayout {
                     Layout.fillWidth: true
@@ -372,7 +486,7 @@ ApplicationWindow {
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 8
-                    visible: modeTabs.currentIndex === 1 || sendController.feedbackScanning
+                    visible: (modeTabs.currentIndex === 1 && !root.scannerMode) || sendController.feedbackScanning
 
                     Label {
                         text: "Camera"
@@ -423,13 +537,15 @@ ApplicationWindow {
                         color: root.inkColor
                         font.pixelSize: 13
                         elide: Text.ElideMiddle
-                        text: modeTabs.currentIndex === 0 ? sendController.fileName : receiveController.fileName
+                        text: modeTabs.currentIndex === 0 ? sendController.fileName : (root.scannerMode ? scannerReceiveController.fileName : receiveController.fileName)
                     }
 
                     InfoPill {
                         text: modeTabs.currentIndex === 0
                             ? (sendController.frameCount > 0 ? (sendController.currentFrameIndex + 1) + " / " + sendController.frameCount : "0 / 0")
-                            : (receiveController.totalChunks > 0 ? receiveController.receivedChunks + " / " + receiveController.totalChunks : "0 / 0")
+                            : (root.scannerMode
+                                ? (scannerReceiveController.totalChunks > 0 ? scannerReceiveController.receivedChunks + " / " + scannerReceiveController.totalChunks : "0 / 0")
+                                : (receiveController.totalChunks > 0 ? receiveController.receivedChunks + " / " + receiveController.totalChunks : "0 / 0"))
                     }
                 }
             }
@@ -584,6 +700,7 @@ ApplicationWindow {
                 anchors.margins: root.pagePadding
                 spacing: 12
 
+                // 摄像头模式显示
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
@@ -592,6 +709,7 @@ ApplicationWindow {
                     border.color: "#2b312e"
                     border.width: 1
                     clip: true
+                    visible: !root.scannerMode
 
                     VideoOutput {
                         id: receivePreview
@@ -665,9 +783,71 @@ ApplicationWindow {
                     }
                 }
 
+                // 扫描器模式显示
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    radius: 8
+                    color: root.panelColor
+                    border.color: root.lineColor
+                    border.width: 1
+                    clip: true
+                    visible: root.scannerMode
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 16
+                        spacing: 12
+
+                        Label {
+                            text: "Scanner Mode"
+                            color: root.inkColor
+                            font.pixelSize: 16
+                            font.weight: Font.DemiBold
+                        }
+
+                        Label {
+                            text: "Status: " + scannerReceiveController.status
+                            color: root.mutedColor
+                            font.pixelSize: 13
+                        }
+
+                        Label {
+                            text: "Received frames: " + scannerReceiveController.acceptedFrameCount + " / " + scannerReceiveController.receivedFrameCount
+                            color: root.mutedColor
+                            font.pixelSize: 13
+                            visible: scannerReceiveController.receivedFrameCount > 0
+                        }
+
+                        ProgressBar {
+                            Layout.fillWidth: true
+                            from: 0
+                            to: 1
+                            value: scannerReceiveController.progress
+                            visible: scannerReceiveController.totalChunks > 0
+                        }
+
+                        Label {
+                            text: "Progress: " + (scannerReceiveController.progress * 100).toFixed(1) + "%"
+                            color: root.mutedColor
+                            font.pixelSize: 13
+                            visible: scannerReceiveController.totalChunks > 0
+                        }
+
+                        Label {
+                            text: "Error: " + scannerReceiveController.lastError
+                            color: root.dangerColor
+                            font.pixelSize: 13
+                            visible: scannerReceiveController.lastError.length > 0
+                        }
+
+                        Item { Layout.fillHeight: true }
+                    }
+                }
+
                 StatusStrip {
-                    text: receiveController.status
-                    alert: receiveController.lastError.length > 0
+                    text: root.scannerMode ? scannerReceiveController.status : receiveController.status
+                    alert: root.scannerMode ? scannerReceiveController.lastError.length > 0 : receiveController.lastError.length > 0
                 }
 
                 Rectangle {
@@ -676,7 +856,7 @@ ApplicationWindow {
                     radius: 8
                     color: root.panelColor
                     border.color: root.lineColor
-                    visible: receiveController.receivedTextAvailable
+                    visible: root.scannerMode ? scannerReceiveController.receivedTextAvailable : receiveController.receivedTextAvailable
 
                     RowLayout {
                         anchors.fill: parent
@@ -688,7 +868,7 @@ ApplicationWindow {
                             Layout.fillHeight: true
                             readOnly: true
                             wrapMode: TextEdit.Wrap
-                            text: receiveController.receivedText
+                            text: root.scannerMode ? scannerReceiveController.receivedText : receiveController.receivedText
                             font.pixelSize: 14
                             background: Rectangle {
                                 radius: 6
@@ -702,7 +882,7 @@ ApplicationWindow {
                             Layout.alignment: Qt.AlignVCenter
                             text: "Copy"
                             primary: true
-                            onClicked: receiveController.copyReceivedText()
+                            onClicked: root.scannerMode ? scannerReceiveController.copyReceivedText() : receiveController.copyReceivedText()
                         }
                     }
                 }
@@ -713,6 +893,7 @@ ApplicationWindow {
                     radius: 8
                     color: root.panelColor
                     border.color: root.lineColor
+                    visible: !root.scannerMode
 
                     GridLayout {
                         anchors.fill: parent
@@ -771,13 +952,63 @@ ApplicationWindow {
                     }
                 }
 
+                // 扫描器模式统计
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: root.width < 760 ? 118 : 78
+                    radius: 8
+                    color: root.panelColor
+                    border.color: root.lineColor
+                    visible: root.scannerMode
+
+                    GridLayout {
+                        anchors.fill: parent
+                        anchors.margins: 10
+                        columns: root.width > 900 ? 4 : 2
+                        columnSpacing: 12
+                        rowSpacing: 6
+
+                        Label {
+                            Layout.fillWidth: true
+                            color: root.mutedColor
+                            elide: Text.ElideRight
+                            font.pixelSize: 12
+                            text: "Received " + scannerReceiveController.receivedFrameCount
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            color: root.mutedColor
+                            elide: Text.ElideRight
+                            font.pixelSize: 12
+                            text: "Accepted " + scannerReceiveController.acceptedFrameCount
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            color: root.mutedColor
+                            elide: Text.ElideRight
+                            font.pixelSize: 12
+                            text: "Rejected " + scannerReceiveController.rejectedFrameCount
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            color: root.mutedColor
+                            elide: Text.ElideRight
+                            font.pixelSize: 12
+                            text: "Port: " + scannerReceiveController.selectedPort
+                        }
+                    }
+                }
+
                 Label {
                     Layout.fillWidth: true
                     color: "#80382f"
                     elide: Text.ElideRight
                     font.pixelSize: 12
-                    visible: receiveController.lastError.length > 0
-                    text: "Last error: " + receiveController.lastError
+                    visible: root.scannerMode ? scannerReceiveController.lastError.length > 0 : receiveController.lastError.length > 0
+                    text: "Last error: " + (root.scannerMode ? scannerReceiveController.lastError : receiveController.lastError)
                 }
 
                 Label {
@@ -785,8 +1016,8 @@ ApplicationWindow {
                     color: root.mutedColor
                     elide: Text.ElideMiddle
                     font.pixelSize: 12
-                    visible: receiveController.lastSavedPath.length > 0
-                    text: "Saved: " + receiveController.lastSavedPath
+                    visible: root.scannerMode ? scannerReceiveController.lastSavedPath.length > 0 : receiveController.lastSavedPath.length > 0
+                    text: "Saved: " + (root.scannerMode ? scannerReceiveController.lastSavedPath : receiveController.lastSavedPath)
                 }
             }
         }
