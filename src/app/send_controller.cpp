@@ -314,7 +314,7 @@ SendController::SendController(QrImageProvider* image_provider, QObject* parent)
     : QObject(parent)
     , image_provider_(image_provider)
 {
-    playback_timer_.setInterval(aqrt::app::transfer_speed_profile(speed_mode_).playback_interval_ms);
+    playback_timer_.setInterval(aqrt::app::transfer_speed_profile(speed_mode_).playback_interval_ms * playback_delay_);
     connect(&playback_timer_, &QTimer::timeout, this, &SendController::nextFrame);
 }
 
@@ -396,6 +396,23 @@ void SendController::setScannerMode(bool enabled)
         return;
     }
     scanner_mode_ = enabled;
+    emit stateChanged();
+}
+
+int SendController::playbackDelay() const
+{
+    return playback_delay_;
+}
+
+void SendController::setPlaybackDelay(int delay)
+{
+    const int clamped = std::clamp(delay, 1, 10);
+    if (playback_delay_ == clamped) {
+        return;
+    }
+    playback_delay_ = clamped;
+    const int base_ms = aqrt::app::transfer_speed_profile(speed_mode_).playback_interval_ms;
+    playback_timer_.setInterval(base_ms * playback_delay_);
     emit stateChanged();
 }
 
@@ -549,8 +566,14 @@ void SendController::prepareBytes(QString file_name, const QByteArray& data, boo
     }
 
     manifest_ = build_result.package.manifest;
-    all_qr_frames_ = std::move(build_result.package.qr_frames);
+    auto& pkg_frames = build_result.package.qr_frames;
+
+    // 分离 manifest、data、end 帧
+    manifest_qr_frame_ = pkg_frames.front();
+    end_qr_frame_ = pkg_frames.back();
+    all_qr_frames_.assign(pkg_frames.begin() + 1, pkg_frames.end() - 1);
     qr_frames_ = all_qr_frames_;
+
     has_package_ = true;
     resend_mode_ = false;
     current_frame_index_ = 0;
@@ -566,7 +589,7 @@ void SendController::setSpeedMode(int mode)
     }
 
     speed_mode_ = normalized;
-    playback_timer_.setInterval(aqrt::app::transfer_speed_profile(speed_mode_).playback_interval_ms);
+    playback_timer_.setInterval(aqrt::app::transfer_speed_profile(speed_mode_).playback_interval_ms * playback_delay_);
     if (has_package_) {
         stopPlayback();
         clearFrames();
@@ -578,20 +601,22 @@ void SendController::setSpeedMode(int mode)
 
 void SendController::nextFrame()
 {
-    if (frameCount() <= 0) {
-        return;
-    }
-    current_frame_index_ = (current_frame_index_ + 1) % frameCount();
+    const int total = aqrt::app::transfer_speed_uses_cimbar(speed_mode_)
+        ? static_cast<int>(cimbar_frames_.size())
+        : playbackFrameCount();
+    if (total <= 0) return;
+    current_frame_index_ = (current_frame_index_ + 1) % total;
     publishCurrentFrame();
     emit stateChanged();
 }
 
 void SendController::previousFrame()
 {
-    if (frameCount() <= 0) {
-        return;
-    }
-    current_frame_index_ = (current_frame_index_ + frameCount() - 1) % frameCount();
+    const int total = aqrt::app::transfer_speed_uses_cimbar(speed_mode_)
+        ? static_cast<int>(cimbar_frames_.size())
+        : playbackFrameCount();
+    if (total <= 0) return;
+    current_frame_index_ = (current_frame_index_ + total - 1) % total;
     publishCurrentFrame();
     emit stateChanged();
 }
@@ -708,6 +733,16 @@ void SendController::clearResendFilter()
     setStatus(QString("Restored full loop: %1 frame(s)").arg(frameCount()));
 }
 
+void SendController::resetToFirstFrame()
+{
+    if (frameCount() <= 0) {
+        return;
+    }
+    current_frame_index_ = 1;  // 跳过 manifest，显示第一个数据帧
+    publishCurrentFrame();
+    emit stateChanged();
+}
+
 void SendController::setStatus(QString status)
 {
     status_ = std::move(status);
@@ -716,22 +751,41 @@ void SendController::setStatus(QString status)
 
 void SendController::publishCurrentFrame()
 {
-    if (image_provider_ == nullptr || frameCount() <= 0) {
+    if (image_provider_ == nullptr) {
         return;
     }
     if (aqrt::app::transfer_speed_uses_cimbar(speed_mode_)) {
+        if (cimbar_frames_.empty()) return;
         image_provider_->setImage(cimbar_frames_[static_cast<std::size_t>(current_frame_index_)]);
     } else {
-        image_provider_->setImage(qr_frames_[static_cast<std::size_t>(current_frame_index_)]);
+        const int total = playbackFrameCount();
+        if (total <= 0) return;
+
+        // 播放序列: [manifest] [data 0..N-1] [end]
+        if (current_frame_index_ == 0) {
+            image_provider_->setImage(manifest_qr_frame_);
+        } else if (current_frame_index_ == total - 1) {
+            image_provider_->setImage(end_qr_frame_);
+        } else {
+            image_provider_->setImage(qr_frames_[static_cast<std::size_t>(current_frame_index_ - 1)]);
+        }
     }
     ++image_revision_;
     emit imageChanged();
+}
+
+int SendController::playbackFrameCount() const
+{
+    // 播放序列: manifest + data frames + end = N + 2
+    return static_cast<int>(qr_frames_.size()) + 2;
 }
 
 void SendController::clearFrames()
 {
     qr_frames_.clear();
     all_qr_frames_.clear();
+    manifest_qr_frame_ = {};
+    end_qr_frame_ = {};
     cimbar_frames_.clear();
     manifest_ = {};
     current_frame_index_ = 0;
@@ -811,10 +865,7 @@ bool SendController::applyFeedbackPayload(const aqrt::core::Bytes& payload)
         return false;
     }
 
-    std::vector<aqrt::qr::QrImage> resend_frames;
-    resend_frames.reserve(2U + request.ranges.size());
-    resend_frames.push_back(all_qr_frames_.front());
-
+    std::vector<std::uint32_t> chunk_indices;
     std::uint64_t missing_count = 0;
     for (const auto& range : request.ranges) {
         if (range.count == 0 || range.start_index >= manifest_.total_chunks) {
@@ -827,32 +878,73 @@ bool SendController::applyFeedbackPayload(const aqrt::core::Bytes& payload)
         }
 
         for (std::uint32_t offset = 0; offset < range.count; ++offset) {
-            const auto chunk_index = range.start_index + offset;
-            const auto frame_index = static_cast<std::size_t>(chunk_index) + 1U;
-            if (frame_index >= all_qr_frames_.size() - 1U) {
-                setStatus("Feedback references a missing local frame");
-                return false;
-            }
-            resend_frames.push_back(all_qr_frames_[frame_index]);
+            chunk_indices.push_back(range.start_index + offset);
             ++missing_count;
         }
     }
 
-    const bool need_end = (request.request_flags & aqrt::core::kMissingRequestFlagNeedEnd) != 0U;
-    if (need_end || !request.ranges.empty()) {
-        resend_frames.push_back(all_qr_frames_.back());
-    }
-    if (resend_frames.size() <= 1U) {
+    if (chunk_indices.empty()) {
         setStatus("Feedback did not request any frames");
         return false;
     }
 
-    qr_frames_ = std::move(resend_frames);
+    // 反馈 ranges 可能重叠或乱序，统一排序去重后构建重传列表
+    std::sort(chunk_indices.begin(), chunk_indices.end());
+    chunk_indices.erase(std::unique(chunk_indices.begin(), chunk_indices.end()), chunk_indices.end());
+
+    enterResendMode(chunk_indices,
+                    QString("Resend loop: %1 missing chunk(s), %2 frame(s)")
+                        .arg(static_cast<qulonglong>(missing_count))
+                        .arg(frameCount()));
+    return true;
+}
+
+void SendController::enterResendMode(const std::vector<std::uint32_t>& chunk_indices, QString status)
+{
+    std::vector<aqrt::qr::QrImage> resend_data;
+    resend_data.reserve(chunk_indices.size());
+    for (const auto chunk_index : chunk_indices) {
+        if (chunk_index >= all_qr_frames_.size()) {
+            // 防御性检查：调用方已校验，正常不会触发
+            setStatus("Resend references a missing local frame");
+            return;
+        }
+        resend_data.push_back(all_qr_frames_[chunk_index]);
+    }
+
+    qr_frames_ = std::move(resend_data);
     current_frame_index_ = 0;
     resend_mode_ = true;
     publishCurrentFrame();
-    setStatus(QString("Resend loop: %1 missing chunk(s), %2 frame(s)")
-                  .arg(static_cast<qulonglong>(missing_count))
-                  .arg(frameCount()));
-    return true;
+    setStatus(std::move(status));
+}
+
+void SendController::resendSpecificFrames(const QString& spec)
+{
+    if (aqrt::app::transfer_speed_uses_cimbar(speed_mode_)) {
+        setStatus("Cimbar mode does not use missing-frame resend");
+        return;
+    }
+    if (!has_package_ || all_qr_frames_.empty()) {
+        setStatus("Prepare a file or text before resending frames");
+        return;
+    }
+
+    // 用户输入的缺失帧号（1-based 播放序号）解析为 0-based chunk_index 列表
+    std::string error;
+    const auto chunk_indices = aqrt::app::parse_frame_spec(
+        spec.toStdString(),
+        static_cast<std::uint32_t>(all_qr_frames_.size()),
+        error);
+    if (!error.empty()) {
+        setStatus(QString("Resend spec invalid: %1").arg(QString::fromStdString(error)));
+        return;
+    }
+
+    stopPlayback();
+    const std::size_t count = chunk_indices.size();
+    enterResendMode(chunk_indices,
+                    count == 0
+                        ? QStringLiteral("Resend loop: manifest + end only")
+                        : QString("Resend loop: %1 frame(s)").arg(static_cast<qulonglong>(count)));
 }

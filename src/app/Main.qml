@@ -339,6 +339,13 @@ ApplicationWindow {
 
                 AppButton {
                     visible: modeTabs.currentIndex === 0
+                    text: "First"
+                    enabled: sendController.frameCount > 0 && sendController.currentFrameIndex > 1
+                    onClicked: sendController.resetToFirstFrame()
+                }
+
+                AppButton {
+                    visible: modeTabs.currentIndex === 0
                     width: 110
                     text: sendController.feedbackScanning ? "Stop FB" : "Scan FB"
                     danger: sendController.feedbackScanning
@@ -486,6 +493,37 @@ ApplicationWindow {
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 8
+                    visible: root.scannerMode
+
+                    Label {
+                        text: "Delay"
+                        color: root.mutedColor
+                        font.pixelSize: 12
+                        Layout.preferredWidth: 48
+                    }
+
+                    Slider {
+                        id: playbackDelaySlider
+                        Layout.fillWidth: true
+                        from: 1
+                        to: 10
+                        stepSize: 1
+                        value: sendController.playbackDelay
+
+                        onMoved: sendController.playbackDelay = value
+                    }
+
+                    Label {
+                        text: playbackDelaySlider.value + "x"
+                        color: root.mutedColor
+                        font.pixelSize: 12
+                        Layout.preferredWidth: 28
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
                     visible: (modeTabs.currentIndex === 1 && !root.scannerMode) || sendController.feedbackScanning
 
                     Label {
@@ -542,7 +580,7 @@ ApplicationWindow {
 
                     InfoPill {
                         text: modeTabs.currentIndex === 0
-                            ? (sendController.frameCount > 0 ? (sendController.currentFrameIndex + 1) + " / " + sendController.frameCount : "0 / 0")
+                            ? (sendController.frameCount > 0 ? Math.max(1, Math.min(sendController.currentFrameIndex, sendController.frameCount)) + " / " + sendController.frameCount : "0 / 0")
                             : (root.scannerMode
                                 ? (scannerReceiveController.totalChunks > 0 ? scannerReceiveController.receivedChunks + " / " + scannerReceiveController.totalChunks : "0 / 0")
                                 : (receiveController.totalChunks > 0 ? receiveController.receivedChunks + " / " + receiveController.totalChunks : "0 / 0"))
@@ -678,6 +716,43 @@ ApplicationWindow {
                             primary: true
                             enabled: sendTextInput.text.length > 0
                             onClicked: sendController.prepareText(sendTextInput.text)
+                        }
+                    }
+                }
+
+                // 手动重传：输入接收端报告的缺失帧号，发送端只循环播放这些帧（替代全量重复循环）
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 56
+                    radius: 8
+                    color: root.panelColor
+                    border.color: root.lineColor
+                    visible: sendController.frameCount > 0 && !sendController.feedbackScanning
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: 10
+                        spacing: 10
+
+                        TextField {
+                            id: resendFrameInput
+                            Layout.fillWidth: true
+                            placeholderText: "Missing frames, e.g. 3,7,15 or 3-5,9 (blank = manifest + end)"
+                            font.pixelSize: 13
+                            color: root.inkColor
+                            background: Rectangle {
+                                radius: 6
+                                color: "#fbfcf8"
+                                border.color: root.lineColor
+                            }
+                        }
+
+                        AppButton {
+                            width: 96
+                            Layout.alignment: Qt.AlignVCenter
+                            text: "Resend"
+                            primary: true
+                            onClicked: sendController.resendSpecificFrames(resendFrameInput.text)
                         }
                     }
                 }
@@ -832,6 +907,21 @@ ApplicationWindow {
                             color: root.mutedColor
                             font.pixelSize: 13
                             visible: scannerReceiveController.totalChunks > 0
+                        }
+
+                        // 缺失帧清单：显示漏扫的具体帧号，便于用户照抄到发送端重传框
+                        Label {
+                            text: scannerReceiveController.missingChunkCount > 0
+                                ? "Missing " + scannerReceiveController.missingChunkCount
+                                    + " / " + scannerReceiveController.totalChunks
+                                    + ":  " + scannerReceiveController.missingFramesText
+                                : "Need end frame"
+                            color: root.dangerColor
+                            font.pixelSize: 14
+                            font.weight: Font.DemiBold
+                            visible: scannerReceiveController.totalChunks > 0 && !scannerReceiveController.completed
+                            wrapMode: Text.Wrap
+                            Layout.fillWidth: true
                         }
 
                         Label {

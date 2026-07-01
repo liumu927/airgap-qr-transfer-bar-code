@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace aqrt::app {
@@ -45,5 +46,15 @@ SendBuildResult build_send_package(
     std::uint32_t manifest_flags = 0);
 
 const char* send_build_error_name(SendBuildError error);
+
+// 解析缺失帧号规格，如 "3,7,15" 或 "3-5,9"（1-based 播放序号，逗号分隔，允许空格）。
+// data_frame_count 为数据帧总数（发送端 all_qr_frames_ 的大小）。
+// 合法帧号范围 [1, data_frame_count]；内部转换为 0-based chunk_index。
+// 返回去重、升序后的 chunk_index 列表；空规格合法（表示仅重传 manifest 与 end）。
+// 解析失败时填充 error 并返回空列表。
+std::vector<std::uint32_t> parse_frame_spec(
+    std::string_view spec,
+    std::uint32_t data_frame_count,
+    std::string& error);
 
 } // namespace aqrt::app

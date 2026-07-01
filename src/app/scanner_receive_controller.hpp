@@ -19,6 +19,8 @@ class ScannerReceiveController final : public QObject {
     Q_PROPERTY(QString fileName READ fileName NOTIFY stateChanged)
     Q_PROPERTY(int receivedChunks READ receivedChunks NOTIFY stateChanged)
     Q_PROPERTY(int totalChunks READ totalChunks NOTIFY stateChanged)
+    Q_PROPERTY(int missingChunkCount READ missingChunkCount NOTIFY stateChanged)
+    Q_PROPERTY(QString missingFramesText READ missingFramesText NOTIFY stateChanged)
     Q_PROPERTY(double progress READ progress NOTIFY stateChanged)
     Q_PROPERTY(bool scanning READ scanning NOTIFY stateChanged)
     Q_PROPERTY(bool completed READ completed NOTIFY stateChanged)
@@ -42,6 +44,8 @@ public:
     [[nodiscard]] QString fileName() const;
     [[nodiscard]] int receivedChunks() const;
     [[nodiscard]] int totalChunks() const;
+    [[nodiscard]] int missingChunkCount() const;
+    [[nodiscard]] QString missingFramesText() const;
     [[nodiscard]] double progress() const;
     [[nodiscard]] bool scanning() const;
     [[nodiscard]] bool completed() const;

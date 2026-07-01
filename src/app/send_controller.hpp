@@ -12,6 +12,7 @@
 #include <QVideoFrame>
 
 #include <atomic>
+#include <cstdint>
 #include <vector>
 
 class QrImageProvider;
@@ -33,6 +34,7 @@ class SendController final : public QObject {
     Q_PROPERTY(QStringList speedModeLabels READ speedModeLabels CONSTANT)
     Q_PROPERTY(bool cimbarAvailable READ cimbarAvailable CONSTANT)
     Q_PROPERTY(bool scannerMode READ scannerMode WRITE setScannerMode NOTIFY stateChanged)
+    Q_PROPERTY(int playbackDelay READ playbackDelay WRITE setPlaybackDelay NOTIFY stateChanged)
 
 public:
     explicit SendController(QrImageProvider* image_provider, QObject* parent = nullptr);
@@ -51,6 +53,8 @@ public:
     [[nodiscard]] bool cimbarAvailable() const;
     [[nodiscard]] bool scannerMode() const;
     void setScannerMode(bool enabled);
+    [[nodiscard]] int playbackDelay() const;
+    void setPlaybackDelay(int delay);
 
     Q_INVOKABLE void chooseOpenFile();
     Q_INVOKABLE void prepareFile(const QUrl& file_url);
@@ -65,6 +69,8 @@ public:
     Q_INVOKABLE void startFeedbackScan();
     Q_INVOKABLE void stopFeedbackScan();
     Q_INVOKABLE void clearResendFilter();
+    Q_INVOKABLE void resendSpecificFrames(const QString& spec);
+    Q_INVOKABLE void resetToFirstFrame();
 
 signals:
     void stateChanged();
@@ -74,10 +80,13 @@ private:
     void prepareBytes(QString file_name, const QByteArray& data, bool text_message);
     void setStatus(QString status);
     void publishCurrentFrame();
+    int playbackFrameCount() const;
     void clearFrames();
     void captureFeedbackVideoFrame(const QVideoFrame& frame);
     void decodeFeedbackVideoRaster(aqrt::qr::QrRasterImage raster);
     bool applyFeedbackPayload(const aqrt::core::Bytes& payload);
+    // 由 chunk_index 列表构建重传播放序列（manifest + 缺失帧 + end）并进入 resend 模式
+    void enterResendMode(const std::vector<std::uint32_t>& chunk_indices, QString status);
 
     QrImageProvider* image_provider_ = nullptr;
     QTimer playback_timer_;
@@ -87,6 +96,8 @@ private:
     QString status_ = "Ready";
     std::vector<aqrt::qr::QrImage> qr_frames_;
     std::vector<aqrt::qr::QrImage> all_qr_frames_;
+    aqrt::qr::QrImage manifest_qr_frame_;
+    aqrt::qr::QrImage end_qr_frame_;
     std::vector<aqrt::qr::RgbImage> cimbar_frames_;
     aqrt::core::ManifestFrame manifest_{};
     int current_frame_index_ = 0;
@@ -98,4 +109,5 @@ private:
     bool resend_mode_ = false;
     bool has_package_ = false;
     bool scanner_mode_ = false;
+    int playback_delay_ = 1;
 };

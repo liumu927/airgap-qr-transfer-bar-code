@@ -105,6 +105,34 @@ int ScannerReceiveController::totalChunks() const
 {
     return static_cast<int>(collector_.total_chunks());
 }
+
+int ScannerReceiveController::missingChunkCount() const
+{
+    return static_cast<int>(collector_.missing_chunk_count());
+}
+
+QString ScannerReceiveController::missingFramesText() const
+{
+    const auto ranges = collector_.missing_ranges();
+    if (ranges.empty()) {
+        return {};
+    }
+
+    // 显示号 = chunk_index + 1，与发送端播放序号一致，便于用户照抄到发送端重传框
+    QString text;
+    for (const auto& range : ranges) {
+        const quint32 start_no = static_cast<quint32>(range.start_index) + 1U;
+        const quint32 end_no = static_cast<quint32>(range.start_index + range.count);
+        if (!text.isEmpty()) {
+            text += QStringLiteral(", ");
+        }
+        text += QString::number(start_no);
+        if (range.count > 1U) {
+            text += QStringLiteral("-") + QString::number(end_no);
+        }
+    }
+    return text;
+}
 double ScannerReceiveController::progress() const
 {
     const int total = totalChunks();

@@ -339,6 +339,72 @@ void test_long_utf8_text_payload_reassembles_exact_bytes()
     require(received.assembled_bytes == text_bytes, "long UTF-8 text bytes should round trip exactly");
 }
 
+void test_parse_frame_spec_single_and_range()
+{
+    std::string error;
+    auto indices = parse_frame_spec("3,7,15", 20, error);
+    require(error.empty(), "single-number spec should parse cleanly");
+    require((indices == std::vector<std::uint32_t>{2, 6, 14}),
+            "single numbers should map to 0-based chunk indices");
+
+    indices = parse_frame_spec("3-5,9", 20, error);
+    require(error.empty(), "range spec should parse cleanly");
+    require((indices == std::vector<std::uint32_t>{2, 3, 4, 8}),
+            "range should expand to consecutive chunk indices");
+}
+
+void test_parse_frame_spec_dedup_and_sort()
+{
+    std::string error;
+    auto indices = parse_frame_spec("9, 3, 3, 4-5", 20, error);
+    require(error.empty(), "mixed spec with spaces and duplicates should parse");
+    require((indices == std::vector<std::uint32_t>{2, 3, 4, 8}),
+            "duplicates should be removed and result sorted ascending");
+}
+
+void test_parse_frame_spec_empty_means_manifest_end_only()
+{
+    std::string error;
+    const auto indices = parse_frame_spec("", 20, error);
+    require(error.empty(), "empty spec should be valid (manifest + end only)");
+    require(indices.empty(), "empty spec should yield no chunk indices");
+}
+
+void test_parse_frame_spec_rejects_out_of_range()
+{
+    std::string error;
+    auto indices = parse_frame_spec("0", 20, error);
+    require(!error.empty(), "frame 0 should be rejected (minimum is 1)");
+    require(indices.empty(), "rejected spec should return empty");
+
+    error.clear();
+    indices = parse_frame_spec("21", 20, error);
+    require(!error.empty(), "frame beyond data count should be rejected");
+    require(indices.empty(), "rejected spec should return empty");
+
+    error.clear();
+    indices = parse_frame_spec("18-25", 20, error);
+    require(!error.empty(), "range exceeding data count should be rejected");
+}
+
+void test_parse_frame_spec_rejects_reverse_range_and_garbage()
+{
+    std::string error;
+    auto indices = parse_frame_spec("5-3", 20, error);
+    require(!error.empty(), "reverse range should be rejected");
+    require(indices.empty(), "rejected spec should return empty");
+
+    error.clear();
+    indices = parse_frame_spec("abc", 20, error);
+    require(!error.empty(), "non-numeric token should be rejected");
+    require(indices.empty(), "rejected spec should return empty");
+
+    error.clear();
+    indices = parse_frame_spec("3,7,15", 0, error);
+    require(!error.empty(), "spec with no data frames should be rejected");
+    require(indices.empty(), "rejected spec should return empty");
+}
+
 } // namespace
 
 void run_receive_frame_collector_tests();
@@ -357,6 +423,11 @@ int main()
     test_cimbar_payload_rejects_name_that_exceeds_u16();
     test_text_payload_reuses_file_transfer_flow();
     test_long_utf8_text_payload_reassembles_exact_bytes();
+    test_parse_frame_spec_single_and_range();
+    test_parse_frame_spec_dedup_and_sort();
+    test_parse_frame_spec_empty_means_manifest_end_only();
+    test_parse_frame_spec_rejects_out_of_range();
+    test_parse_frame_spec_rejects_reverse_range_and_garbage();
     run_receive_frame_collector_tests();
     run_qr_loopback_tests();
 
