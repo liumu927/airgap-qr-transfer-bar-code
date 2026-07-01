@@ -14,3 +14,7 @@ windows-*.png
 airgap_*.png
 build-log.txt
 cmake-output.txt
+
+# 本地工具与资料目录
+.omc/
+动态2D离线文件传输工具/
