@@ -9,8 +9,7 @@ ApplicationWindow {
     id: root
     width: 1160
     height: 950
-    minimumWidth: 720
-    minimumHeight: 520
+    // 移除桌面级 minimumWidth/Height：Android 全屏，720 的最小宽度会撑爆手机竖屏，遮挡按钮。
     visible: true
     title: "AirGap QR Transfer"
     color: "#f4f6f1"

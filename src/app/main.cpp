@@ -51,7 +51,14 @@ int main(int argc, char* argv[])
     QGuiApplication app(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("AirGap QR Transfer"));
     QGuiApplication::setOrganizationName(QStringLiteral("AirGapQrTransfer"));
-    QQuickStyle::setStyle(QStringLiteral("Fusion"));
+    // Android 用 Material（控件紧凑，适配小屏）；桌面保留 Fusion。
+    QQuickStyle::setStyle(
+#ifdef Q_OS_ANDROID
+        QStringLiteral("Material")
+#else
+        QStringLiteral("Fusion")
+#endif
+    );
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("AirGap QR Transfer"));
