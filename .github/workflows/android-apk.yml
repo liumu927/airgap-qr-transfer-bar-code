@@ -61,11 +61,13 @@ jobs:
 
       - name: Configure CMake
         run: |
+          QT_ANDROID=$GITHUB_WORKSPACE/../Qt/6.5.3/android_arm64_v8a
+          QT_HOST=$GITHUB_WORKSPACE/../Qt/6.5.3/gcc_64
           cmake -S . -B build-android-qr-arm64 -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_TOOLCHAIN_FILE=${{ steps.qt-android.outputs.dir }}/lib/cmake/Qt6/qt.toolchain.cmake \
-            -DCMAKE_PREFIX_PATH=${{ steps.qt-android.outputs.dir }} \
-            -DQT_HOST_PATH=${{ steps.qt-host.outputs.dir }} \
+            -DCMAKE_TOOLCHAIN_FILE=$QT_ANDROID/lib/cmake/Qt6/qt.toolchain.cmake \
+            -DCMAKE_PREFIX_PATH=$QT_ANDROID \
+            -DQT_HOST_PATH=$QT_HOST \
             -DANDROID_ABI=${{ env.ANDROID_ABI }} \
             -DANDROID_PLATFORM=${{ env.ANDROID_PLATFORM }} \
             -DAIRGAP_QR_DEP_ROOT=${{ github.workspace }}/build-vcpkg-android/vcpkg_installed/arm64-android \
