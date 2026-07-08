@@ -994,23 +994,37 @@ ApplicationWindow {
                         anchors.margins: 10
                         spacing: 10
 
-                        ScrollView {
-                            id: receivedTextScroll
+                        Item {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            clip: true
 
-                            TextArea {
-                                readOnly: true
-                                width: receivedTextScroll.width
-                                wrapMode: TextEdit.Wrap
-                                text: root.scannerMode ? scannerReceiveController.receivedText : receiveController.receivedText
-                                font.pixelSize: 14
-                                background: Rectangle {
-                                    radius: 6
-                                    color: "#fbfcf8"
-                                    border.color: root.lineColor
+                            ScrollView {
+                                id: receivedTextScroll
+                                anchors.fill: parent
+                                clip: true
+
+                                TextArea {
+                                    readOnly: true
+                                    width: receivedTextScroll.width
+                                    wrapMode: TextEdit.Wrap
+                                    text: root.scannerMode ? scannerReceiveController.receivedText : receiveController.receivedText
+                                    font.pixelSize: 14
+                                    background: Rectangle {
+                                        radius: 6
+                                        color: "#fbfcf8"
+                                        border.color: root.lineColor
+                                    }
                                 }
+                            }
+
+                            Label {
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                anchors.margins: 8
+                                text: (root.scannerMode ? scannerReceiveController.receivedText : receiveController.receivedText).length + " 字符"
+                                font.pixelSize: 11
+                                color: root.mutedColor
+                                z: 1
                             }
                         }
 
