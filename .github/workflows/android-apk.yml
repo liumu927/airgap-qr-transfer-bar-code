@@ -3,6 +3,10 @@ name: Build Android APK
 on:
   workflow_dispatch: {}
 
+# Upload to release 需要写权限；默认 GITHUB_TOKEN 在只读仓库设置下无法更新 release。
+permissions:
+  contents: write
+
 env:
   QT_VERSION: '6.5.3'
   NDK_VERSION: '27.2.12479018'
