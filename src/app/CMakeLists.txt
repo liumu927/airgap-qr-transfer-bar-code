@@ -49,6 +49,12 @@ qt_add_executable(airgap_qr_transfer_app
     video_frame_luminance.hpp
 )
 
+if(WIN32)
+    set(APP_ICON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/air.ico")
+    configure_file(app.rc.in ${CMAKE_CURRENT_BINARY_DIR}/app.rc @ONLY)
+    target_sources(airgap_qr_transfer_app PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/app.rc)
+endif()
+
 if(ANDROID)
     set_target_properties(airgap_qr_transfer_app PROPERTIES
         QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"

@@ -19,6 +19,7 @@
         android:allowBackup="false"
         android:fullBackupOnly="false"
         android:hardwareAccelerated="true"
+        android:icon="@mipmap/ic_launcher"
         android:label="AirGap QR Transfer"
         android:allowNativeHeapPointerTagging="false">
 
