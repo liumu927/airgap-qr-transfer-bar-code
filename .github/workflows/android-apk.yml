@@ -56,13 +56,11 @@ jobs:
 
       - name: Install vcpkg deps (arm64-android)
         run: |
+          export ANDROID_NDK_HOME="$ANDROID_SDK_ROOT/ndk/${{ env.NDK_VERSION }}"
+          export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
           vcpkg install \
             --triplet arm64-android \
-            --x-install-root=${{ github.workspace }}/build-vcpkg-android/vcpkg_installed \
-            libqrencode nu-book-zxing-cpp
-        env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_SDK_ROOT }}/ndk/${{ env.NDK_VERSION }}
-          ANDROID_NDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}/ndk/${{ env.NDK_VERSION }}
+            --x-install-root=${{ github.workspace }}/build-vcpkg-android/vcpkg_installed
 
       - name: Configure CMake
         run: |
