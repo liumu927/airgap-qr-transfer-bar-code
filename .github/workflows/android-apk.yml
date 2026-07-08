@@ -32,8 +32,8 @@ jobs:
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "platforms;android-33" "build-tools;33.0.2" "ndk;27.2.12479018"
 
-      - name: Remove incompatible android-36-ext19 platform
-        run: rm -rf $ANDROID_SDK_ROOT/platforms/android-36-ext19
+      - name: Keep only android-33 platform
+        run: find $ANDROID_SDK_ROOT/platforms -maxdepth 1 -name "android-*" ! -name "android-33" -exec rm -rf {} +
 
       - name: Install Qt (Android arm64-v8a)
         id: qt-android
