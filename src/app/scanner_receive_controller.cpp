@@ -228,6 +228,22 @@ void ScannerReceiveController::reset()
     emit stateChanged();
 }
 
+QString ScannerReceiveController::defaultSaveUrl() const
+{
+    if (!hasVerifiedPayload()) {
+        return {};
+    }
+    const QString name = QFileInfo(verifiedFileName()).fileName();
+    if (name.isEmpty()) {
+        return {};
+    }
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    if (dir.isEmpty()) {
+        return QUrl::fromLocalFile(name).toString();
+    }
+    return QUrl::fromLocalFile(QDir(dir).filePath(name)).toString();
+}
+
 void ScannerReceiveController::saveToFile(const QUrl& fileUrl)
 {
     if (!hasVerifiedPayload()) {

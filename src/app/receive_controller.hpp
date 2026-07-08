@@ -44,6 +44,7 @@ class ReceiveController final : public QObject {
     Q_PROPERTY(int rejectedQrFrameCount READ rejectedQrFrameCount NOTIFY stateChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY stateChanged)
     Q_PROPERTY(QString lastSavedPath READ lastSavedPath NOTIFY stateChanged)
+    Q_PROPERTY(QString defaultSaveUrl READ defaultSaveUrl NOTIFY stateChanged)
     Q_PROPERTY(QString receivedText READ receivedText NOTIFY stateChanged)
     Q_PROPERTY(bool receivedTextAvailable READ receivedTextAvailable NOTIFY stateChanged)
     Q_PROPERTY(QString selectedCameraName READ selectedCameraName NOTIFY stateChanged)
@@ -77,6 +78,7 @@ public:
     [[nodiscard]] int rejectedQrFrameCount() const;
     [[nodiscard]] QString lastError() const;
     [[nodiscard]] QString lastSavedPath() const;
+    [[nodiscard]] QString defaultSaveUrl() const;
     [[nodiscard]] QString receivedText() const;
     [[nodiscard]] bool receivedTextAvailable() const;
     [[nodiscard]] QString selectedCameraName() const;

@@ -465,6 +465,22 @@ void ReceiveController::attachVideoSink(QObject* video_sink)
         Qt::DirectConnection);
 }
 
+QString ReceiveController::defaultSaveUrl() const
+{
+    if (!hasVerifiedPayload()) {
+        return {};
+    }
+    const QString name = QFileInfo(verifiedFileName()).fileName();
+    if (name.isEmpty()) {
+        return {};
+    }
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    if (dir.isEmpty()) {
+        return QUrl::fromLocalFile(name).toString();
+    }
+    return QUrl::fromLocalFile(QDir(dir).filePath(name)).toString();
+}
+
 void ReceiveController::saveToFile(const QUrl& file_url)
 {
     if (!hasVerifiedPayload()) {

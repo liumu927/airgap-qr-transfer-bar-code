@@ -738,7 +738,7 @@ void SendController::resetToFirstFrame()
     if (frameCount() <= 0) {
         return;
     }
-    current_frame_index_ = 1;  // 跳过 manifest，显示第一个数据帧
+    current_frame_index_ = 0;  // 回到 manifest（播放起点），与 prepare 初始状态一致
     publishCurrentFrame();
     emit stateChanged();
 }

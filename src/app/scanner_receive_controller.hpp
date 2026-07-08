@@ -29,6 +29,7 @@ class ScannerReceiveController final : public QObject {
     Q_PROPERTY(int rejectedFrameCount READ rejectedFrameCount NOTIFY stateChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY stateChanged)
     Q_PROPERTY(QString lastSavedPath READ lastSavedPath NOTIFY stateChanged)
+    Q_PROPERTY(QString defaultSaveUrl READ defaultSaveUrl NOTIFY stateChanged)
     Q_PROPERTY(QString receivedText READ receivedText NOTIFY stateChanged)
     Q_PROPERTY(bool receivedTextAvailable READ receivedTextAvailable NOTIFY stateChanged)
     Q_PROPERTY(QStringList availablePorts READ availablePorts NOTIFY stateChanged)
@@ -54,6 +55,7 @@ public:
     [[nodiscard]] int rejectedFrameCount() const;
     [[nodiscard]] QString lastError() const;
     [[nodiscard]] QString lastSavedPath() const;
+    [[nodiscard]] QString defaultSaveUrl() const;
     [[nodiscard]] QString receivedText() const;
     [[nodiscard]] bool receivedTextAvailable() const;
     [[nodiscard]] QStringList availablePorts() const;

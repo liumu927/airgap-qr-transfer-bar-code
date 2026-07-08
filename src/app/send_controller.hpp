@@ -108,6 +108,6 @@ private:
     bool playing_ = false;
     bool resend_mode_ = false;
     bool has_package_ = false;
-    bool scanner_mode_ = false;
-    int playback_delay_ = 1;
+    bool scanner_mode_ = true;
+    int playback_delay_ = 2;
 };

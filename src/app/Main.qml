@@ -7,8 +7,8 @@ import QtQuick.Window
 
 ApplicationWindow {
     id: root
-    width: 1040
-    height: 680
+    width: 1160
+    height: 950
     minimumWidth: 720
     minimumHeight: 520
     visible: true
@@ -19,7 +19,7 @@ ApplicationWindow {
     property bool receiveCameraInitialized: false
     property var speedModeLabels: sendController.speedModeLabels
     readonly property bool androidCameraHot: Qt.platform.os === "android"
-    property bool scannerMode: false
+    property bool scannerMode: true
 
     readonly property int pagePadding: width < 760 ? 12 : 18
     readonly property color accentColor: "#2f7d63"
@@ -135,6 +135,7 @@ ApplicationWindow {
         id: openDialog
         fileMode: FileDialog.OpenFile
         onAccepted: {
+            sendTextInput.text = ""
             var fileUrl = selectedFile.toString()
             if (fileUrl.length === 0 && selectedFiles.length > 0) {
                 fileUrl = selectedFiles[0].toString()
@@ -146,12 +147,14 @@ ApplicationWindow {
     FileDialog {
         id: saveDialog
         fileMode: FileDialog.SaveFile
+        currentFile: receiveController.defaultSaveUrl
         onAccepted: receiveController.saveToFile(selectedFile)
     }
 
     FileDialog {
         id: scannerSaveDialog
         fileMode: FileDialog.SaveFile
+        currentFile: scannerReceiveController.defaultSaveUrl
         onAccepted: scannerReceiveController.saveToFile(selectedFile)
     }
 
@@ -312,7 +315,14 @@ ApplicationWindow {
                     visible: modeTabs.currentIndex === 0
                     text: "Open"
                     primary: true
-                    onClicked: Qt.platform.os === "android" ? sendController.chooseOpenFile() : openDialog.open()
+                    onClicked: {
+                        sendTextInput.text = ""
+                        if (Qt.platform.os === "android") {
+                            sendController.chooseOpenFile()
+                        } else {
+                            openDialog.open()
+                        }
+                    }
                 }
 
                 AppButton {
@@ -340,7 +350,7 @@ ApplicationWindow {
                 AppButton {
                     visible: modeTabs.currentIndex === 0
                     text: "First"
-                    enabled: sendController.frameCount > 0 && sendController.currentFrameIndex > 1
+                    enabled: sendController.frameCount > 0 && sendController.currentFrameIndex > 0
                     onClicked: sendController.resetToFirstFrame()
                 }
 
@@ -580,7 +590,7 @@ ApplicationWindow {
 
                     InfoPill {
                         text: modeTabs.currentIndex === 0
-                            ? (sendController.frameCount > 0 ? Math.max(1, Math.min(sendController.currentFrameIndex, sendController.frameCount)) + " / " + sendController.frameCount : "0 / 0")
+                            ? (sendController.frameCount > 0 ? Math.max(1, Math.min(sendController.currentFrameIndex + 1, sendController.frameCount + 2)) + " / " + (sendController.frameCount + 2) : "0 / 0")  // 1-based 帧号；+2 含 manifest 与 end
                             : (root.scannerMode
                                 ? (scannerReceiveController.totalChunks > 0 ? scannerReceiveController.receivedChunks + " / " + scannerReceiveController.totalChunks : "0 / 0")
                                 : (receiveController.totalChunks > 0 ? receiveController.receivedChunks + " / " + receiveController.totalChunks : "0 / 0"))
@@ -695,27 +705,58 @@ ApplicationWindow {
                         anchors.margins: 10
                         spacing: 10
 
-                        TextArea {
-                            id: sendTextInput
+                        Item {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            placeholderText: "Text"
-                            wrapMode: TextEdit.Wrap
-                            font.pixelSize: 14
-                            background: Rectangle {
-                                radius: 6
-                                color: "#fbfcf8"
-                                border.color: root.lineColor
+
+                            ScrollView {
+                                id: sendTextInputScroll
+                                anchors.fill: parent
+                                clip: true
+
+                                TextArea {
+                                    id: sendTextInput
+                                    width: sendTextInputScroll.width
+                                    placeholderText: "Text"
+                                    wrapMode: TextEdit.Wrap
+                                    font.pixelSize: 14
+                                    background: Rectangle {
+                                        radius: 6
+                                        color: "#fbfcf8"
+                                        border.color: root.lineColor
+                                    }
+                                }
+                            }
+
+                            Label {
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                anchors.margins: 8
+                                text: sendTextInput.text.length + " 字符"
+                                font.pixelSize: 11
+                                color: root.mutedColor
+                                z: 1
                             }
                         }
 
-                        AppButton {
-                            width: root.width < 760 ? 104 : 132
+                        Column {
+                            spacing: 8
                             Layout.alignment: Qt.AlignVCenter
-                            text: "Prepare Text"
-                            primary: true
-                            enabled: sendTextInput.text.length > 0
-                            onClicked: sendController.prepareText(sendTextInput.text)
+
+                            AppButton {
+                                width: root.width < 760 ? 96 : 120
+                                text: "Prepare Text"
+                                primary: true
+                                enabled: sendTextInput.text.length > 0
+                                onClicked: sendController.prepareText(sendTextInput.text)
+                            }
+
+                            AppButton {
+                                width: root.width < 760 ? 96 : 120
+                                text: "Clear"
+                                enabled: sendTextInput.text.length > 0
+                                onClicked: sendTextInput.text = ""
+                            }
                         }
                     }
                 }
@@ -953,17 +994,23 @@ ApplicationWindow {
                         anchors.margins: 10
                         spacing: 10
 
-                        TextArea {
+                        ScrollView {
+                            id: receivedTextScroll
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            readOnly: true
-                            wrapMode: TextEdit.Wrap
-                            text: root.scannerMode ? scannerReceiveController.receivedText : receiveController.receivedText
-                            font.pixelSize: 14
-                            background: Rectangle {
-                                radius: 6
-                                color: "#fbfcf8"
-                                border.color: root.lineColor
+                            clip: true
+
+                            TextArea {
+                                readOnly: true
+                                width: receivedTextScroll.width
+                                wrapMode: TextEdit.Wrap
+                                text: root.scannerMode ? scannerReceiveController.receivedText : receiveController.receivedText
+                                font.pixelSize: 14
+                                background: Rectangle {
+                                    radius: 6
+                                    color: "#fbfcf8"
+                                    border.color: root.lineColor
+                                }
                             }
                         }
 
