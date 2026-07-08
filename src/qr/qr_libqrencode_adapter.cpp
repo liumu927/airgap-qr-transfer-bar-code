@@ -27,7 +27,7 @@ EncodeResult LibQrEncodeAdapter::encode(const Bytes& payload) const
         static_cast<int>(payload.size()),
         payload.data(),
         0,
-        QR_ECLEVEL_Q);
+        QR_ECLEVEL_M);
 
     if (code == nullptr) {
         return {QrError::EncodeFailed, {}, "libqrencode failed to encode payload"};
