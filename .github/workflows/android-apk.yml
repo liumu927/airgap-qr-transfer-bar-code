@@ -74,7 +74,7 @@ jobs:
             -DBUILD_TESTING=OFF
 
       - name: Build APK
-        run: cmake --build build-android-qr-arm64 --parallel
+        run: cmake --build build-android-qr-arm64 --target apk --parallel
 
       - name: Locate APK
         run: |
