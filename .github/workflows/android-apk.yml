@@ -40,7 +40,10 @@ jobs:
           host: linux
           target: android
           arch: android_arm64_v8a
-          modules: qtdeclarative qtquickcontrols2 qtmultimedia qtserialport
+          modules: qtmultimedia qtserialport
+
+      - name: List Qt Android modules
+        run: python3 -m aqt list-qt linux android --modules 6.5.3 android_arm64_v8a
 
       - name: Install Qt (host gcc_64)
         id: qt-host
