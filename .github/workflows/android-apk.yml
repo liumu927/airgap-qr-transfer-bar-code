@@ -24,13 +24,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK & NDK
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: |
-            platforms;android-33
-            build-tools;33.0.2
-            ndk;27.2.12479018
+
+      - name: Install SDK & NDK packages
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platforms;android-33" "build-tools;33.0.2" "ndk;27.2.12479018"
 
       - name: Setup Ninja
         uses: seanmiddleditch/gha-setup-ninja@v6
