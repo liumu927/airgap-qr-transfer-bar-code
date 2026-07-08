@@ -78,8 +78,9 @@ jobs:
 
       - name: Locate APK
         run: |
-          find build-android-qr-arm64 -name "*.apk" -print
-          echo "APK_PATH=$(find build-android-qr-arm64 -name 'android-build-debug.apk' | head -1)" >> $GITHUB_ENV
+          APK=$(find build-android-qr-arm64 -name '*.apk' | head -1)
+          echo "Found APK: $APK"
+          echo "APK_PATH=$APK" >> $GITHUB_ENV
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
