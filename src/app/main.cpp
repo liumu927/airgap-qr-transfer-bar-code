@@ -99,7 +99,7 @@ int main(int argc, char* argv[])
     });
     parser.addOption({
         QStringLiteral("speed-mode"),
-        QStringLiteral("Select transfer speed: safe, balanced, fast, or cimbar when that backend is enabled."),
+        QStringLiteral("Select transfer speed: safe, balanced, fast, dense, or cimbar when that backend is enabled."),
         QStringLiteral("mode"),
     });
     parser.addOption({
@@ -122,7 +122,15 @@ int main(int argc, char* argv[])
     SendController send_controller(image_provider);
     ReceiveController receive_controller(feedback_image_provider);
     aqrt::app::ScannerReceiveController scanner_receive_controller;
-    const int startup_speed_mode = parse_speed_mode(parser.value(QStringLiteral("speed-mode")));
+    const int startup_speed_mode = parser.isSet(QStringLiteral("speed-mode"))
+        ? parse_speed_mode(parser.value(QStringLiteral("speed-mode")))
+        : parse_speed_mode(QString::fromLatin1(
+#ifdef Q_OS_ANDROID
+              "balanced"
+#else
+              "dense"
+#endif
+          ));
     send_controller.setSpeedMode(startup_speed_mode);
     receive_controller.setSpeedMode(startup_speed_mode);
 

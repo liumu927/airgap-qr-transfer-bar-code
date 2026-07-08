@@ -12,7 +12,7 @@
 namespace aqrt::app {
 
 constexpr std::uint32_t kDefaultSendChunkSize = 128;
-constexpr std::size_t kDefaultQrPayloadLimit = 1024;
+constexpr std::size_t kDefaultQrPayloadLimit = 2048;
 
 enum class SendBuildError {
     None,

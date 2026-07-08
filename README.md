@@ -239,7 +239,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\android-pull-received.ps1 -So
 --camera-index <n>  Select receive camera by zero-based index
 --save-dir <path>   Auto-save verified receive output to a directory
 --status-file <p>   Write receive diagnostics to a status file
---speed-mode <mode> Select safe, balanced, fast, or cimbar when available
+--speed-mode <mode> Select safe, balanced, fast, dense, or cimbar when available
 ```
 
 ## Security Model

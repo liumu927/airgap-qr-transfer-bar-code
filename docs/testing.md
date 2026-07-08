@@ -153,7 +153,7 @@ The app also accepts these direct startup arguments:
 --save-dir <path>
 --status-file <path>
 --camera-index <index>
---speed-mode <safe|balanced|fast|cimbar>
+--speed-mode <safe|balanced|fast|dense|cimbar>
 ```
 
 The speed modes are intended for controlled throughput testing:
@@ -162,6 +162,7 @@ The speed modes are intended for controlled throughput testing:
 safe:     128 byte chunks, 450 ms playback interval, 220 ms decode interval
 balanced: 256 byte chunks, 300 ms playback interval, 180 ms decode interval
 fast:     384 byte chunks, 240 ms playback interval, 150 ms decode interval
+dense:    1024 byte chunks, 450 ms playback interval, 220 ms decode interval
 cimbar:   experimental high-density color barcode mode, available only in AIRGAP_ENABLE_CIMBAR builds
 ```
 
