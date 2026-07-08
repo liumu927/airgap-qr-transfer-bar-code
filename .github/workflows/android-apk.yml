@@ -32,9 +32,6 @@ jobs:
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "platforms;android-33" "build-tools;33.0.2" "ndk;27.2.12479018"
 
-      - name: Setup Ninja
-        uses: seanmiddleditch/gha-setup-ninja@v6
-
       - name: Install Qt (Android arm64-v8a)
         id: qt-android
         uses: jurplel/install-qt-action@v3
@@ -66,9 +63,9 @@ jobs:
         run: |
           cmake -S . -B build-android-qr-arm64 -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_TOOLCHAIN_FILE=${{ steps.qt-android.outputs.qt-install-path }}/lib/cmake/Qt6/qt.toolchain.cmake \
-            -DCMAKE_PREFIX_PATH=${{ steps.qt-android.outputs.qt-install-path }} \
-            -DQT_HOST_PATH=${{ steps.qt-host.outputs.qt-install-path }} \
+            -DCMAKE_TOOLCHAIN_FILE=${{ steps.qt-android.outputs.dir }}/lib/cmake/Qt6/qt.toolchain.cmake \
+            -DCMAKE_PREFIX_PATH=${{ steps.qt-android.outputs.dir }} \
+            -DQT_HOST_PATH=${{ steps.qt-host.outputs.dir }} \
             -DANDROID_ABI=${{ env.ANDROID_ABI }} \
             -DANDROID_PLATFORM=${{ env.ANDROID_PLATFORM }} \
             -DAIRGAP_QR_DEP_ROOT=${{ github.workspace }}/build-vcpkg-android/vcpkg_installed/arm64-android \
