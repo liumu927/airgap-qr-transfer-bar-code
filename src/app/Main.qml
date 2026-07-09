@@ -11,7 +11,9 @@ ApplicationWindow {
     // 界面按桌面宽屏布局溢出手机竖屏（按钮被裁到屏幕外）。
     width: Qt.platform.os === "android" ? Screen.width : 1160
     height: Qt.platform.os === "android" ? Screen.height : 950
-    // 移除桌面级 minimumWidth/Height：Android 全屏，720 的最小宽度会撑爆手机竖屏，遮挡按钮。
+    // PC 保留桌面最小尺寸约束；Android 全屏跟随屏幕不设最小。
+    minimumWidth: Qt.platform.os === "android" ? 0 : 720
+    minimumHeight: Qt.platform.os === "android" ? 0 : 520
     visible: true
     title: "AirGap QR Transfer"
     color: "#f4f6f1"
@@ -32,14 +34,16 @@ ApplicationWindow {
     readonly property color lineColor: "#d8ddd5"
 
     Component.onCompleted: {
-        // 诊断：打印实际窗口/屏幕尺寸，定位布局溢出根因（root.width 是否跟随屏幕）
-        console.warn("AirGapLayout init root=", root.width, "x", root.height,
-                     "Screen=", Screen.width, "x", Screen.height,
-                     "dpi=", Screen.devicePixelRatio)
-        Qt.callLater(function() {
-            console.warn("AirGapLayout laidout root=", root.width, "x", root.height,
-                         "headerH=", topBar.height, "contentH=", root.height - topBar.height)
-        })
+        // 诊断：打印实际窗口/屏幕尺寸，定位 Android 布局溢出根因（仅 Android 输出，PC 保持安静）
+        if (Qt.platform.os === "android") {
+            console.warn("AirGapLayout init root=", root.width, "x", root.height,
+                         "Screen=", Screen.width, "x", Screen.height,
+                         "dpi=", Screen.devicePixelRatio)
+            Qt.callLater(function() {
+                console.warn("AirGapLayout laidout root=", root.width, "x", root.height,
+                             "headerH=", topBar.height, "contentH=", root.height - topBar.height)
+            })
+        }
         modeTabs.currentIndex = startupMode
         if (startupFullScreen) {
             root.visibility = Window.FullScreen

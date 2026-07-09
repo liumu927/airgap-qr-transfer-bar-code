@@ -485,7 +485,9 @@ void SendController::prepareFileFromString(const QString& file_url)
 
 void SendController::prepareText(const QString& text)
 {
+#ifdef Q_OS_ANDROID
     qInfo().noquote() << "AirGapSend prepareText bytes=" << text.toUtf8().size();
+#endif
     stopPlayback();
     clearFrames();
 
@@ -499,11 +501,15 @@ void SendController::prepareText(const QString& text)
 
 void SendController::prepareBytes(QString file_name, const QByteArray& data, bool text_message)
 {
+#ifdef Q_OS_ANDROID
     QElapsedTimer prep_timer;
     prep_timer.start();
+#endif
     const auto file_bytes = to_bytes(data);
+#ifdef Q_OS_ANDROID
     qInfo().noquote() << "AirGapSend prepareBytes start size=" << file_bytes.size()
                       << "speed=" << speedModeName() << "scanner=" << scanner_mode_;
+#endif
     file_name_ = std::move(file_name);
     const QByteArray file_name_utf8 = file_name_.toUtf8();
 
@@ -556,7 +562,9 @@ void SendController::prepareBytes(QString file_name, const QByteArray& data, boo
     const aqrt::qr::IQrEncoder& encoder = scanner_mode_
         ? static_cast<const aqrt::qr::IQrEncoder&>(base64_encoder)
         : static_cast<const aqrt::qr::IQrEncoder&>(real_encoder);
+#ifdef Q_OS_ANDROID
     qInfo() << "AirGapSend encode start elapsed=" << prep_timer.elapsed() << "ms";
+#endif
     auto build_result = aqrt::app::build_send_package(
         session_id,
         std::string(file_name_utf8.constData(), static_cast<std::size_t>(file_name_utf8.size())),
@@ -564,7 +572,9 @@ void SendController::prepareBytes(QString file_name, const QByteArray& data, boo
         speed_profile.chunk_size,
         encoder,
         text_message ? aqrt::core::kManifestFlagTextMessage : 0U);
+#ifdef Q_OS_ANDROID
     qInfo() << "AirGapSend encode done elapsed=" << prep_timer.elapsed() << "ms";
+#endif
     if (!build_result.ok()) {
         clearFrames();
         setStatus(QString("%1: %2")
@@ -585,13 +595,19 @@ void SendController::prepareBytes(QString file_name, const QByteArray& data, boo
     has_package_ = true;
     resend_mode_ = false;
     current_frame_index_ = 0;
+#ifdef Q_OS_ANDROID
     qInfo() << "AirGapSend publish start elapsed=" << prep_timer.elapsed() << "ms";
+#endif
     publishCurrentFrame();
+#ifdef Q_OS_ANDROID
     qInfo() << "AirGapSend publish done elapsed=" << prep_timer.elapsed() << "ms";
     setStatus(QString("Prepared %1 frame(s), %2 mode (%3ms)")
                   .arg(frameCount())
                   .arg(speedModeName())
                   .arg(prep_timer.elapsed()));
+#else
+    setStatus(QString("Prepared %1 frame(s), %2 mode").arg(frameCount()).arg(speedModeName()));
+#endif
 }
 
 void SendController::setSpeedMode(int mode)
@@ -667,13 +683,19 @@ void SendController::attachFeedbackVideoSink(QObject* video_sink)
         return;
     }
 
-    // QueuedConnection：同 receive，避免相机线程阻塞触发 Qt 6.5.3 ImageReader maxImages 崩溃。
+    // 同 receive：Android 用 QueuedConnection 避免相机线程阻塞触发 Qt 6.5.3 ImageReader maxImages 崩溃；
+    // PC 保持 DirectConnection 原状。
+#ifdef Q_OS_ANDROID
+    constexpr auto frame_connection_type = Qt::QueuedConnection;
+#else
+    constexpr auto frame_connection_type = Qt::DirectConnection;
+#endif
     feedback_video_frame_connection_ = connect(
         feedback_video_sink_,
         &QVideoSink::videoFrameChanged,
         this,
         &SendController::captureFeedbackVideoFrame,
-        Qt::QueuedConnection);
+        frame_connection_type);
 }
 
 void SendController::startFeedbackScan()

@@ -457,15 +457,21 @@ void ReceiveController::attachVideoSink(QObject* video_sink)
     }
 
     qInfo() << "AirGapReceive video sink attached";
-    // QueuedConnection：让 captureVideoFrame 在主线程异步执行，相机线程 emit 后立即返回。
+    // Android 用 QueuedConnection：captureVideoFrame 在主线程异步执行，相机线程 emit 后立即返回，
     // 避免 map+像素拷贝阻塞 CameraBackground 线程导致 ImageReader 的 Image 来不及 close，
     // 触发 Qt 6.5.3 QtCamera2「maxImages already acquired」崩溃。
+    // PC 保持 DirectConnection（原状，Qt Multimedia PC 后端无此问题）。
+#ifdef Q_OS_ANDROID
+    constexpr auto frame_connection_type = Qt::QueuedConnection;
+#else
+    constexpr auto frame_connection_type = Qt::DirectConnection;
+#endif
     video_frame_connection_ = connect(
         video_sink_,
         &QVideoSink::videoFrameChanged,
         this,
         &ReceiveController::captureVideoFrame,
-        Qt::QueuedConnection);
+        frame_connection_type);
 }
 
 QString ReceiveController::defaultSaveUrl() const
